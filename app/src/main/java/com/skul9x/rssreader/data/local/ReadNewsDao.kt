@@ -55,6 +55,12 @@ interface ReadNewsDao {
     @Query("SELECT * FROM read_news WHERE newsId = :newsId")
     suspend fun getById(newsId: String): ReadNewsItem?
 
+    /**
+     * Get multiple read items by IDs (batch).
+     */
+    @Query("SELECT * FROM read_news WHERE newsId IN (:newsIds)")
+    suspend fun getByIds(newsIds: List<String>): List<ReadNewsItem>
+
     // ========== SYNC OPERATIONS ==========
 
     /**

@@ -175,8 +175,19 @@ class RssParser {
     /**
      * Generate a unique ID for a news item based on link and title.
      */
+    /**
+     * Generate a unique ID for a news item based on link and title.
+     * Normalizes the link to handle http/https, www/non-www, and trailing slash differences.
+     */
     private fun generateId(link: String, title: String): String {
-        val input = "$link$title"
+        // Normalize link: remove protocol, www, and trailing slash
+        val normalizedLink = link
+            .removePrefix("http://")
+            .removePrefix("https://")
+            .removePrefix("www.")
+            .trimEnd('/')
+            
+        val input = "$normalizedLink$title"
         val md = MessageDigest.getInstance("MD5")
         val digest = md.digest(input.toByteArray())
         return digest.joinToString("") { "%02x".format(it) }

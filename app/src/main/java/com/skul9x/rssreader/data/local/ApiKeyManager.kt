@@ -2,17 +2,20 @@ package com.skul9x.rssreader.data.local
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 /**
  * Manager for storing and retrieving Gemini API keys.
- * Uses SharedPreferences for persistent storage.
+ * Uses EncryptedSharedPreferences for secure storage.
  */
 class ApiKeyManager private constructor(context: Context) {
 
     companion object {
-        private const val PREFS_NAME = "api_keys_prefs"
+        // Changed name to ensure we start fresh with secure prefs
+        private const val PREFS_NAME = "api_keys_secure"
         private const val KEY_API_KEYS = "gemini_api_keys"
         
         @Volatile
@@ -25,7 +28,35 @@ class ApiKeyManager private constructor(context: Context) {
         }
     }
 
-    private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val prefs: SharedPreferences by lazy {
+        try {
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+
+            EncryptedSharedPreferences.create(
+                context,
+                PREFS_NAME,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (e: Exception) {
+            // Fallback to clear data if encryption keys are corrupted (common on reinstall/restore)
+            context.deleteSharedPreferences(PREFS_NAME)
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+                
+            EncryptedSharedPreferences.create(
+                context,
+                PREFS_NAME,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        }
+    }
 
     /**
      * Get all stored API keys.

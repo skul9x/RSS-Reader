@@ -106,11 +106,19 @@ class LocalSyncRepository(
     }
 
     /**
+     * Get multiple read items by IDs (batch).
+     */
+    suspend fun getByIds(newsIds: List<String>): List<ReadNewsItem> {
+        return dao.getByIds(newsIds)
+    }
+
+    /**
      * Cleanup items older than 30 days.
      */
     suspend fun cleanupOldItems() {
-        val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
-        dao.deleteOlderThan(thirtyDaysAgo)
+        val retentionDays = com.skul9x.rssreader.utils.AppConfig.READ_HISTORY_RETENTION_DAYS.toLong()
+        val olderThan = System.currentTimeMillis() - (retentionDays * 24 * 60 * 60 * 1000)
+        dao.deleteOlderThan(olderThan)
     }
 
     /**

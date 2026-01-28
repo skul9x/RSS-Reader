@@ -38,7 +38,6 @@ class RssRepository(
         private const val TAG = "RssRepository"
         private const val CACHE_EXPIRY_MS = 60 * 60 * 1000L // 1 hour
         private const val MIN_CACHE_SIZE = 20 // Minimum items to consider cache valid
-        private const val READ_HISTORY_CLEANUP_DAYS = 90 // Keep read history for 90 days
     }
 
     /**
@@ -87,7 +86,8 @@ class RssRepository(
      * Cleanup old read history (older than 7 days).
      */
     suspend fun cleanupOldReadHistory() = withContext(Dispatchers.IO) {
-        val cutoffTime = System.currentTimeMillis() - (READ_HISTORY_CLEANUP_DAYS * 24 * 60 * 60 * 1000L)
+        val retentionDays = com.skul9x.rssreader.utils.AppConfig.READ_HISTORY_RETENTION_DAYS
+        val cutoffTime = System.currentTimeMillis() - (retentionDays * 24 * 60 * 60 * 1000L)
         readNewsDao.deleteOlderThan(cutoffTime)
     }
 
@@ -150,17 +150,29 @@ class RssRepository(
 
         val feedIds = enabledFeeds.map { it.id }
         
-        // Optimize: Pass read IDs directly to SQL to avoid fetching read items
-        val readIds = getAllReadIds().toList()
+        // Optimize: Use DB-side filtering to avoid loading all read IDs into memory
+        // This solves performance issues with large history and avoids SQLite variable limits
         
-        // Fetch exactly what we need (plus a small buffer just in case)
-        val cached = cachedNewsDao.getRandomNewsFromFeeds(feedIds, count + 2, readIds)
+        // Pass empty list for excludedIds if none are specifically provided (method signature doesn't take them yet)
+        // Ideally we would want to exclude items already shown in session if we passed them in
+        val excludedInSession = emptyList<String>() 
+        
+        // 1. Get ALL candidates IDs (fast index scan)
+        val candidateIds = cachedNewsDao.getUnreadNewsIdsFromFeeds(feedIds, excludedInSession)
+        
+        if (candidateIds.isEmpty()) {
+            return@withContext emptyList()
+        }
+
+        // 2. Shuffle in Memory (fast for < 100k items)
+        val selectedIds = candidateIds.shuffled().take(count)
+        
+        // 3. Fetch full items by ID (fast primary key lookup)
+        val cached = cachedNewsDao.getNewsByIds(selectedIds)
         val newsItems = cached.map { it.toNewsItem() }
         
-        // Fallback filter in memory just to be safe
-        val filtered = newsItems.filter { it.id !in readIds }
-        
-        filtered.take(count)
+        // No need to take(count) again as we already limited IDs
+        newsItems
     }
 
     /**

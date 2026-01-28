@@ -6,6 +6,8 @@ import com.skul9x.rssreader.data.remote.FirestoreSyncRepository
 import com.skul9x.rssreader.data.repository.LocalSyncRepository
 import kotlinx.coroutines.delay
 
+import androidx.annotation.VisibleForTesting
+
 /**
  * Coordinator for synchronizing local and remote read status.
  * Handles:
@@ -14,7 +16,7 @@ import kotlinx.coroutines.delay
  * 3. Resolving conflicts
  * 4. Cleaning up old data
  */
-class SyncCoordinator private constructor(
+class SyncCoordinator @VisibleForTesting internal constructor(
     private val localRepo: LocalSyncRepository,
     private val firestoreRepo: FirestoreSyncRepository,
     private val logRepo: com.skul9x.rssreader.data.repository.FirebaseLogRepository?
@@ -77,14 +79,15 @@ class SyncCoordinator private constructor(
         val oneDayAgo = System.currentTimeMillis() - (24 * 60 * 60 * 1000L)
         
         if (lastCleanup < oneDayAgo) {
-            val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
+            val retentionDays = com.skul9x.rssreader.utils.AppConfig.READ_HISTORY_RETENTION_DAYS.toLong()
+            val cleanupThreshold = System.currentTimeMillis() - (retentionDays * 24 * 60 * 60 * 1000)
             
             logRepo?.logInfo("Starting daily cleanup")
             // Clean local DB
             localRepo.cleanupOldItems()
             
             // Clean Firestore (expensive operation, do sparingly)
-            firestoreRepo.deleteOldItems(thirtyDaysAgo)
+            firestoreRepo.deleteOldItems(cleanupThreshold)
             
             // Update last cleanup timestamp
             localRepo.updateLastCleanupDate(System.currentTimeMillis())
@@ -116,14 +119,22 @@ class SyncCoordinator private constructor(
      *   - Earliest readTimestamp wins (assume read earlier = accurate first read)
      *   - If timestamps equal, 'smartphone' device type wins (arbitrary tie-breaker)
      */
-    private suspend fun mergeWithLocal(remoteItems: List<ReadNewsItem>) {
+    @VisibleForTesting
+    internal suspend fun mergeWithLocal(remoteItems: List<ReadNewsItem>) {
+        if (remoteItems.isEmpty()) return
+
+        // Batch fetch all corresponding local items to avoid N+1 queries
+        val remoteIds = remoteItems.map { it.newsId }
+        val localItems = localRepo.getByIds(remoteIds)
+        val localItemsMap = localItems.associateBy { it.newsId }
+
         val itemsToUpdate = mutableListOf<ReadNewsItem>()
 
         remoteItems.forEach { remote ->
-            val local = localRepo.getById(remote.newsId)
+            val local = localItemsMap[remote.newsId]
 
             if (local == null) {
-                // New item from remote → Insert
+                // New item from remote -> Insert
                 itemsToUpdate.add(remote.copy(syncStatus = SyncStatus.SYNCED))
             } else {
                 // Conflict resolution

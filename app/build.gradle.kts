@@ -96,6 +96,8 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+    testImplementation("io.mockk:mockk:1.13.10")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
 
     // Firebase
     implementation(platform(libs.firebase.bom))
@@ -112,4 +114,7 @@ dependencies {
 
     // DataStore (for sync preferences)
     implementation(libs.datastore.preferences)
+
+    // Security
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
 }

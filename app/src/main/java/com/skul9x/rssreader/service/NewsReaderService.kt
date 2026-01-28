@@ -105,6 +105,7 @@ class NewsReaderService : Service() {
     private lateinit var articleFetcher: ArticleContentFetcher
     private var mediaSession: MediaSessionCompat? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var wakeLockJob: Job? = null // Job to monitor and extend WakeLock
 
     // FIX: @Volatile for thread-safe visibility across coroutines
     @Volatile private var newsItems: List<NewsItem> = emptyList()
@@ -448,7 +449,9 @@ class NewsReaderService : Service() {
             
             // FIX: Release WakeLock before re-acquiring to prevent memory leak
             releaseWakeLockSafely()
-            wakeLock?.acquire(30 * 60 * 1000L)
+            
+            // Use smart monitor instead of hard lock
+            startWakeLockMonitor()
             
             // Capture navigation state at start (before coroutine)
             val wasNavigating = isNavigatingInSingleMode
@@ -599,9 +602,9 @@ class NewsReaderService : Service() {
         // FIX: Release WakeLock before re-acquiring to prevent memory leak
         releaseWakeLockSafely()
         
-        // Acquire WakeLock to prevent CPU sleep (30 min timeout as safety)
-        wakeLock?.acquire(30 * 60 * 1000L)
-        Log.d(TAG, "WakeLock acquired, starting from index $fromIndex")
+        // Acquire WakeLock smartly to prevent CPU sleep
+        startWakeLockMonitor()
+        Log.d(TAG, "WakeLock monitoring started, starting from index $fromIndex")
         
         readAllJob = serviceScope.launch {
             _serviceState.update { state ->
@@ -743,7 +746,8 @@ class NewsReaderService : Service() {
         // FIX: Reset navigation flag
         isNavigatingInSingleMode = false
         
-        // Release WakeLock
+        // Release WakeLock and cancel monitor
+        wakeLockJob?.cancel()
         releaseWakeLockSafely()
     }
     
@@ -942,14 +946,69 @@ class NewsReaderService : Service() {
     }
     
     /**
+     * Start a coroutine to monitor and extend WakeLock intelligently.
+     * Strategy:
+     * 1. Acquire lock for 10 minutes (safer than 30m).
+     * 2. Every 5 minutes, check if we are still reading.
+     * 3. If yes -> Extend lock for another 10 minutes.
+     * 4. If no -> Release lock and stop monitoring.
+     */
+    private fun startWakeLockMonitor() {
+        wakeLockJob?.cancel() // Cancel any existing monitor
+        
+        wakeLockJob = serviceScope.launch {
+            DebugLogger.log(TAG, ">>> WakeLock Monitor: Started")
+            
+            try {
+                // Initial acquisition
+                if (wakeLock?.isHeld == true) wakeLock?.release()
+                wakeLock?.acquire(10 * 60 * 1000L) // 10 minutes
+                DebugLogger.log(TAG, ">>> WakeLock Monitor: Acquired (10 mins)")
+                
+                while (isActive) {
+                    // Check every 5 minutes
+                    delay(5 * 60 * 1000L)
+                    
+                    if (_serviceState.value.isReading) {
+                        // Still reading -> Extend lock
+                        // Note: acquire() with timeout acts as a reference counted lock or just updates internal state depending on implementation.
+                        // Ideally release then acquire to reset timer safely or just acquire again if ref counted.
+                        // Best practice for "Extending": Release old, Acquire new.
+                        
+                        // Safety: Release potentially old lock (if ref count > 1, this decrements. If not ref counted, it releases).
+                        // To be clean: Ensure we hold only 1 reference.
+                        if (wakeLock?.isHeld == true) {
+                            wakeLock?.release()
+                        }
+                        wakeLock?.acquire(10 * 60 * 1000L)
+                        DebugLogger.log(TAG, ">>> WakeLock Monitor: Extended (10 mins)")
+                    } else {
+                        // Not reading anymore -> Stop monitoring
+                        DebugLogger.log(TAG, ">>> WakeLock Monitor: Not reading, releasing lock")
+                        break
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "WakeLock monitor error: ${e.message}")
+            } finally {
+                releaseWakeLockSafely()
+            }
+        }
+    }
+
+    /**
      * Safely release WakeLock if held.
      * FIX: Centralized to prevent memory leaks.
      */
     private fun releaseWakeLockSafely() {
+        // Also cancel monitor job if it's not the one calling this (to avoid self-cancellation issues if running within it, though finally block handles it)
+        // Ideally explicitly cancel job when stopping reading.
+        
         if (wakeLock?.isHeld == true) {
             try {
                 wakeLock?.release()
                 Log.d(TAG, "WakeLock released")
+                DebugLogger.log(TAG, ">>> WakeLock released")
             } catch (e: Exception) {
                 Log.w(TAG, "Error releasing WakeLock: ${e.message}")
             }
