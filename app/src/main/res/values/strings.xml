@@ -1,0 +1,24 @@
+<resources>
+    <string name="app_name">RSS Reader</string>
+    <string name="main_title">Tin Tức</string>
+    <string name="loading">Đang tải...</string>
+    <string name="summarizing">Đang tóm tắt...</string>
+    <string name="stop">Dừng</string>
+    <string name="replay">Đọc lại</string>
+    <string name="speaking">Đang đọc...</string>
+    <string name="refresh">Làm mới</string>
+    <string name="settings">Cài đặt</string>
+    <string name="add_feed">Thêm nguồn</string>
+    <string name="edit_feed">Sửa nguồn</string>
+    <string name="delete_feed">Xóa nguồn</string>
+    <string name="feed_name">Tên nguồn</string>
+    <string name="feed_url">URL RSS</string>
+    <string name="save">Lưu</string>
+    <string name="cancel">Hủy</string>
+    <string name="no_feeds">Chưa có nguồn RSS</string>
+    <string name="no_news">Không có tin tức</string>
+    <string name="error_loading">Lỗi khi tải tin tức</string>
+    <string name="error_summarizing">Lỗi khi tóm tắt</string>
+    <string name="quota_exhausted">Đã hết toàn bộ quota API</string>
+    <string name="tts_not_ready">Text-to-Speech chưa sẵn sàng</string>
+</resources>

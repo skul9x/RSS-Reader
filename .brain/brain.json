@@ -1,0 +1,104 @@
+{
+    "meta": {
+        "schema_version": "1.1.0",
+        "awf_version": "3.3.0"
+    },
+    "project": {
+        "name": "RSS Reader",
+        "type": "Android App",
+        "status": "In Maintenance"
+    },
+    "tech_stack": {
+        "frontend": {
+            "language": "Kotlin",
+            "ui": "Jetpack Compose"
+        },
+        "backend": {
+            "local_db": "Room"
+        },
+        "tools": [
+            "Gradle",
+            "ADB",
+            "Python/PySide6"
+        ]
+    },
+    "database_schema": {
+        "tables": [],
+        "relationships": []
+    },
+    "api_endpoints": [],
+    "features": [
+        {
+            "name": "News Reading",
+            "status": "Active",
+            "details": "Optimized with Regex-First extraction for major domains"
+        },
+        {
+            "name": "Text-to-Speech",
+            "status": "Active"
+        },
+        {
+            "name": "Media Button Control",
+            "status": "Fixed",
+            "details": "Supports Headset/Car controls with Mutex-based debouncing"
+        },
+        {
+            "name": "Debug Logging",
+            "status": "Active"
+        },
+        {
+            "name": "Resume Reading",
+            "status": "Active",
+            "details": "Can resume from last sentence after phone call interruption"
+        }
+    ],
+    "knowledge_items": {
+        "patterns": [
+            {
+                "name": "Service-based Architecture",
+                "description": "NewsReaderService handles background playback"
+            },
+            {
+                "name": "Fire-and-Forget for Non-Critical IO",
+                "description": "Use launch() instead of withContext() for database operations that shouldn't block UI/navigation. Example: markAsRead() in skip operations."
+            },
+            {
+                "name": "Regex-First Extraction",
+                "description": "Prioritize Regex over Jsoup for known domains (Genk, VnExpress, Tuoi Tre) to reduce parsing overhead. Fallback to Jsoup if Regex fails."
+            }
+        ],
+        "gotchas": [
+            {
+                "name": "Media Button Blocking",
+                "description": "Avoid using flags for debouncing async media events. Use Mutex.tryLock() with strictly enforced try-finally blocks."
+            },
+            {
+                "name": "Service Lifecycle",
+                "description": "startForegroundService can restart service with empty state if process was killed."
+            },
+            {
+                "name": "Mutex Deadlock from Suspend Functions",
+                "description": "CRITICAL: Inside a Mutex-protected coroutine, NEVER use withContext() or other suspend functions that might block. Use launch() (fire-and-forget) instead to prevent mutex from being held forever."
+            },
+            {
+                "name": "AudioFocus Loss Stops TTS",
+                "description": "TtsManager's AudioFocusChangeListener calls stop() on focus loss events. This can happen unexpectedly during audio stream transitions."
+            },
+            {
+                "name": "Android API in Unit Tests",
+                "description": "Classes like android.text.Html or android.util.Log cannot be mocked directly in JVM unit tests. Must use Dependency Injection with Interfaces (AppLogger, HtmlCleaner)."
+            },
+            {
+                "name": "Short Content Filtering",
+                "description": "Extractors have logic to return null if content < 20-50 chars. Ensure test data exceeds this limit."
+            }
+        ],
+        "conventions": [
+            "Use DebugLogger for runtime troubleshoot",
+            "Always add DebugLog before/after mutex operations",
+            "Non-blocking IO for navigation (NEXT/PREV) operations",
+            "Use AppLogger interface instead of static Log calls for testability",
+            "Use HtmlCleaner interface instead of static Html.fromHtml for testability"
+        ]
+    }
+}
