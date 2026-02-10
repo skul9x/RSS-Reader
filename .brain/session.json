@@ -1,0 +1,81 @@
+{
+    "updated_at": "2026-02-10T16:30:00+07:00",
+    "working_on": {
+        "feature": "Refactor ArticleContentFetcher",
+        "task": "Decompose monolithic class into Facade + Strategy components",
+        "status": "completed",
+        "files": [
+            "app/src/main/java/com/skul9x/rssreader/data/network/ArticleContentFetcher.kt",
+            "app/src/main/java/com/skul9x/rssreader/data/network/HtmlFetcher.kt",
+            "app/src/main/java/com/skul9x/rssreader/data/network/RedirectResolver.kt",
+            "app/src/main/java/com/skul9x/rssreader/data/network/TitleExtractor.kt",
+            "app/src/main/java/com/skul9x/rssreader/data/network/HtmlSanitizer.kt",
+            "app/src/main/java/com/skul9x/rssreader/data/network/ContentExtractorRegistry.kt",
+            "app/src/main/java/com/skul9x/rssreader/data/network/extractors/SiteContentExtractor.kt"
+        ],
+        "blockers": [],
+        "notes": "Successful refactor. Build passed. Tests passed."
+    },
+    "pending_tasks": [
+        {
+            "task": "Deploy optimized version",
+            "priority": "high",
+            "notes": "Wait for user confirmation"
+        }
+    ],
+    "recent_changes": [
+        {
+            "timestamp": "2026-02-10T16:20:00+07:00",
+            "type": "refactor",
+            "description": "Refactored ArticleContentFetcher (1500+ lines) into 19 smaller files using Facade + Strategy pattern. Reduced main class size by ~85% while maintaining public API compatibility.",
+            "files": [
+                "app/src/main/java/com/skul9x/rssreader/data/network/**"
+            ]
+        },
+        {
+            "timestamp": "2026-02-10T16:15:00+07:00",
+            "type": "fix",
+            "description": "Fixed Nested TypeAlias compilation error by moving data classes to top-level.",
+            "files": [
+                "app/src/main/java/com/skul9x/rssreader/data/network/ArticleContentFetcher.kt",
+                "app/src/main/java/com/skul9x/rssreader/ui/settings/HtmlAnalyzerScreen.kt"
+            ]
+        },
+        {
+            "timestamp": "2026-01-28T15:30:00+07:00",
+            "type": "test",
+            "description": "Created Unit Tests for ArticleContentFetcher. Verified Regex vs Jsoup fallback logic.",
+            "files": [
+                "app/src/test/java/com/skul9x/rssreader/data/network/ArticleContentFetcherTest.kt"
+            ]
+        }
+    ],
+    "errors_encountered": [
+        {
+            "error": "Nested and local type aliases are not supported",
+            "solution": "Moved ArticleData and ContentCandidate to top-level classes and updated imports.",
+            "resolved": true,
+            "file": "ArticleContentFetcher.kt"
+        },
+        {
+            "error": "GenericExtractor import ambiguity",
+            "solution": "Standardized imports in ContentExtractorRegistry.",
+            "resolved": true
+        }
+    ],
+    "decisions_made": [
+        {
+            "decision": "Use Facade Pattern",
+            "reason": "Delegate logic from ArticleContentFetcher to new components while keeping public API stable."
+        },
+        {
+            "decision": "Use Strategy Pattern",
+            "reason": "Encapsulate site-specific extraction logic in separate classes."
+        },
+        {
+            "decision": "Move Nested Classes to Top-Level",
+            "reason": "Kotlin doesn't support nested type aliases to same-named classes well, caused compilation error."
+        }
+    ],
+    "skipped_tests": []
+}
