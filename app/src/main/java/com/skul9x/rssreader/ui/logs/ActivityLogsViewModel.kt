@@ -35,10 +35,10 @@ class ActivityLogsViewModel(application: Application) : AndroidViewModel(applica
      */
     private fun loadLogs() {
         viewModelScope.launch {
-            val logsFlow = if (_uiState.value.showErrorsOnly) {
-                logDao.getErrorLogs()
-            } else {
-                logDao.getAllLogs()
+            val logsFlow = when {
+                _uiState.value.showErrorsOnly -> logDao.getErrorLogs()
+                _uiState.value.showGeminiOnly -> logDao.getGeminiLogs()
+                else -> logDao.getAllLogs()
             }
             
             logsFlow.collect { logs ->
@@ -51,7 +51,15 @@ class ActivityLogsViewModel(application: Application) : AndroidViewModel(applica
      * Toggle filter between all logs and errors only.
      */
     fun toggleFilter() {
-        _uiState.update { it.copy(showErrorsOnly = !it.showErrorsOnly, isLoading = true) }
+        _uiState.update { it.copy(showErrorsOnly = !it.showErrorsOnly, showGeminiOnly = false, isLoading = true) }
+        loadLogs()
+    }
+
+    /**
+     * Toggle Gemini filter.
+     */
+    fun toggleGeminiFilter() {
+        _uiState.update { it.copy(showGeminiOnly = !it.showGeminiOnly, showErrorsOnly = false, isLoading = true) }
         loadLogs()
     }
     
@@ -90,5 +98,6 @@ class ActivityLogsViewModel(application: Application) : AndroidViewModel(applica
 data class ActivityLogsUiState(
     val logs: List<ActivityLog> = emptyList(),
     val isLoading: Boolean = true,
-    val showErrorsOnly: Boolean = false
+    val showErrorsOnly: Boolean = false,
+    val showGeminiOnly: Boolean = false
 )

@@ -154,12 +154,15 @@ class GeminiApiClient(context: Context) {
 
             Log.d(TAG, "Cache MISS for $url - Calling API")
             
-            // 2. Call API
-            val result = summarizeWithRetry(content)
+            // 2. Call API (Logging happens inside summarizeWithRetry for specific models)
+            val result = summarizeWithRetry(content, url)
             
             // 3. Save to Cache if successful
             if (result is SummarizeResult.Success) {
+                // Success is already logged inside summarizeWithRetry
                 newsSummaryDao.insertSummary(NewsSummary(url, result.text))
+            } else if (result is SummarizeResult.AllQuotaExhausted) {
+                ActivityLogger.logGeminiError(url, "All Quota Exhausted", "All Models")
             }
             
             result
@@ -213,11 +216,21 @@ class GeminiApiClient(context: Context) {
                             }
                             is ApiResult.QuotaExceeded -> {
                                 Log.w(TAG, "Quota exceeded (429): $model | API ${keyIndex + 1}")
+                                ActivityLogger.logGeminiFallback(
+                                    url = "", 
+                                    reason = "Quota Exceeded (429)", 
+                                    fromModel = "$model (Key ${keyIndex + 1})"
+                                )
                                 quotaManager.markExhausted(model, apiKey)
                                 continue 
                             }
                             is ApiResult.ServerBusy -> {
                                 Log.w(TAG, "Server busy (503): $model | API ${keyIndex + 1}")
+                                ActivityLogger.logGeminiFallback(
+                                    url = "", 
+                                    reason = "Server Busy (503)", 
+                                    fromModel = "$model (Key ${keyIndex + 1})"
+                                )
                                 quotaManager.markCooldown(model, apiKey)
                                 continue
                             }
@@ -309,10 +322,20 @@ class GeminiApiClient(context: Context) {
                                 }
                             }
                             is ApiResult.QuotaExceeded -> {
+                                ActivityLogger.logGeminiFallback(
+                                    url = "BATCH_TITLE_TRANSLATION", 
+                                    reason = "Quota Exceeded (429)", 
+                                    fromModel = "$model (Key ${keyIndex + 1})"
+                                )
                                 quotaManager.markExhausted(model, apiKey)
                                 continue
                             }
                             is ApiResult.ServerBusy -> {
+                                ActivityLogger.logGeminiFallback(
+                                    url = "BATCH_TITLE_TRANSLATION", 
+                                    reason = "Server Busy (503)", 
+                                    fromModel = "$model (Key ${keyIndex + 1})"
+                                )
                                 quotaManager.markCooldown(model, apiKey)
                                 continue
                             }
@@ -492,7 +515,7 @@ Text: $text
      * 
      * This prioritizes using the best/fastest model available across all keys.
      */
-    private suspend fun summarizeWithRetry(content: String): SummarizeResult {
+    private suspend fun summarizeWithRetry(content: String, url: String): SummarizeResult {
         // Thread-safe read of current state
         val keys = stateMutex.withLock { apiKeys.toList() }
         
@@ -515,6 +538,8 @@ Text: $text
                 
                 Log.d(TAG, "Trying Model: $model | API key ${keyIndex + 1}/${keys.size}")
 
+                ActivityLogger.logGeminiStart(url, "$model (Key ${keyIndex + 1})")
+
                 val result = tryGenerateContent(apiKey, model, content)
 
                 when (result) {
@@ -525,15 +550,26 @@ Text: $text
                             currentModelIndex = modelIndex
                         }
                         Log.d(TAG, "Summarize SUCCESS: $model | API key ${keyIndex + 1}")
+                        ActivityLogger.logGeminiSuccess(url, result.text, "$model (Key ${keyIndex + 1})")
                         return SummarizeResult.Success(result.text, model)
                     }
                     is ApiResult.QuotaExceeded -> {
                         Log.w(TAG, "Quota exceeded (429): $model | API key ${keyIndex + 1}")
+                        ActivityLogger.logGeminiFallback(
+                            url = "SUMMARIZE", 
+                            reason = "Quota Exceeded (429)", 
+                            fromModel = "$model (Key ${keyIndex + 1})"
+                        )
                         quotaManager.markExhausted(model, apiKey)
                         continue 
                     }
                     is ApiResult.ServerBusy -> {
                         Log.w(TAG, "Server busy (503): $model | API key ${keyIndex + 1}")
+                        ActivityLogger.logGeminiFallback(
+                            url = "SUMMARIZE", 
+                            reason = "Server Busy (503)", 
+                            fromModel = "$model (Key ${keyIndex + 1})"
+                        )
                         quotaManager.markCooldown(model, apiKey)
                         continue
                     }

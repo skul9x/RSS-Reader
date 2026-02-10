@@ -133,8 +133,8 @@ fun ActivityLogsScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 FilterChip(
-                    selected = !uiState.showErrorsOnly,
-                    onClick = { if (uiState.showErrorsOnly) viewModel.toggleFilter() },
+                    selected = !uiState.showErrorsOnly && !uiState.showGeminiOnly,
+                    onClick = { if (uiState.showErrorsOnly || uiState.showGeminiOnly) viewModel.toggleFilter() },
                     label = { Text("Tất cả") },
                     leadingIcon = {
                         Icon(
@@ -151,6 +151,18 @@ fun ActivityLogsScreen(
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                )
+                FilterChip(
+                    selected = uiState.showGeminiOnly,
+                    onClick = { viewModel.toggleGeminiFilter() },
+                    label = { Text("Gemini") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp)
                         )
@@ -421,6 +433,7 @@ private fun getEventIcon(eventType: String, isError: Boolean): Pair<androidx.com
         eventType == ActivityLogger.EVENT_JSOUP_PARSE -> Icons.Default.Code to Color(0xFFFFCA28)
         eventType == ActivityLogger.EVENT_GEMINI_START -> Icons.Default.Psychology to Color(0xFF26C6DA)
         eventType == ActivityLogger.EVENT_GEMINI_SUCCESS -> Icons.Default.AutoAwesome to Color(0xFF26C6DA)
+        eventType == ActivityLogger.EVENT_GEMINI_FALLBACK -> Icons.Default.SyncProblem to Color(0xFFFF7043)
         else -> Icons.Default.Circle to Color.Gray
     }
 }

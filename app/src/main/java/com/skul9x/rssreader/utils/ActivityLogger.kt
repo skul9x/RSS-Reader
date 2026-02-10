@@ -46,6 +46,7 @@ object ActivityLogger {
     const val EVENT_GEMINI_START = "GEMINI_START"
     const val EVENT_GEMINI_SUCCESS = "GEMINI_SUCCESS"
     const val EVENT_GEMINI_ERROR = "GEMINI_ERROR"
+    const val EVENT_GEMINI_FALLBACK = "GEMINI_FALLBACK"
     const val EVENT_HTTP_REQUEST = "HTTP_REQUEST"
     const val EVENT_HTTP_SUCCESS = "HTTP_SUCCESS"
     const val EVENT_HTTP_ERROR = "HTTP_ERROR"
@@ -136,13 +137,26 @@ object ActivityLogger {
     /**
      * Log Gemini API error.
      */
-    fun logGeminiError(url: String, error: String) {
+    fun logGeminiError(url: String, error: String, model: String = "") {
         logEvent(
             eventType = EVENT_GEMINI_ERROR,
             url = url,
             message = "Lỗi Gemini API",
-            details = error,
+            details = "$error${if (model.isNotEmpty()) " | Model: $model" else ""}",
             isError = true
+        )
+    }
+
+    /**
+     * Log Gemini Fallback event (switching model or key).
+     */
+    fun logGeminiFallback(url: String, reason: String, fromModel: String, toModel: String = "") {
+        logEvent(
+            eventType = EVENT_GEMINI_FALLBACK,
+            url = url,
+            message = "Chuyển đổi Gemini (Fallback)",
+            details = "Lý do: $reason | Từ: $fromModel${if (toModel.isNotEmpty()) " -> Sang: $toModel" else ""}",
+            isError = true // Mark as error/warning to highlight in UI
         )
     }
     

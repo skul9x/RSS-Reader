@@ -20,6 +20,9 @@ interface ActivityLogDao {
     
     @Query("SELECT * FROM activity_logs WHERE isError = 1 ORDER BY timestamp DESC")
     fun getErrorLogs(): Flow<List<ActivityLog>>
+
+    @Query("SELECT * FROM activity_logs WHERE eventType LIKE 'GEMINI%' ORDER BY timestamp DESC")
+    fun getGeminiLogs(): Flow<List<ActivityLog>>
     
     @Query("DELETE FROM activity_logs")
     suspend fun deleteAll()
