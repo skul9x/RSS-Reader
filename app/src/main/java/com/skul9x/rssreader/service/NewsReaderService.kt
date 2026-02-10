@@ -43,6 +43,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import com.skul9x.rssreader.data.model.ReadNewsItem
+import com.skul9x.rssreader.data.network.gemini.SummarizeResult
 
 /**
  * Foreground Service for reading news aloud.
@@ -512,7 +513,7 @@ class NewsReaderService : Service() {
                                 content
                             } else {
                                 when (val result = geminiClient.summarizeForTts(content, news.link)) {
-                                    is GeminiApiClient.SummarizeResult.Success -> result.text
+                                    is SummarizeResult.Success -> result.text
                                     else -> news.description.take(200)
                                 }
                             }
@@ -661,7 +662,7 @@ class NewsReaderService : Service() {
                             }
                             
                             when (val result = geminiClient.summarizeForTts(content, news.link)) {
-                                is GeminiApiClient.SummarizeResult.Success -> result.text
+                                is SummarizeResult.Success -> result.text
                                 else -> news.description.take(200)
                             }
                         } catch (e: CancellationException) {

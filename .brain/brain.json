@@ -56,6 +56,21 @@
             "name": "Resume Reading",
             "status": "Active",
             "details": "Can resume from last sentence after phone call interruption"
+        },
+        {
+            "name": "Gemini API Usage Logging",
+            "status": "Active",
+            "details": "Detailed logs for API calls (Start, Success, Error, Fallback) with per-model tracking and Gemini-specific UI filter."
+        },
+        {
+            "name": "Gemini Client Modularization",
+            "status": "Completed",
+            "details": "Refactored GeminiApiClient into modular package (com.skul9x.rssreader.data.network.gemini) with GeminiModels.kt, GeminiPrompts.kt, GeminiResponseHelper.kt. All consumer files updated."
+        },
+        {
+            "name": "Activity Log Management",
+            "status": "Active",
+            "details": "Supports filtering by All, Errors, and Gemini events. Automatically cleans up logs older than 7 days."
         }
     ],
     "knowledge_items": {
@@ -79,6 +94,14 @@
             {
                 "name": "Facade Pattern for Legacy Refactoring",
                 "description": "When refactoring large God classes, create a thin Facade that delegates to smaller components (Strategy, Utils) but keeps the original public API to avoid breaking consumers."
+            },
+            {
+                "name": "Modular API Helpers",
+                "description": "Extract logic for different API responsibilities (Models, Prompts, Response Parsing) into a specialized package to keep clients lightweight."
+            },
+            {
+                "name": "Unified Synchronization",
+                "description": "Always use a single synchronization mechanism (e.g., Mutex) for a shared state to avoid race conditions between Coroutine and Thread contexts."
             }
         ],
         "gotchas": [
@@ -113,6 +136,14 @@
             {
                 "name": "Kotlin Nested TypeAlias",
                 "description": "Kotlin does not support nested type aliases to same-named classes well. Move data classes to top-level if collision occurs during refactoring."
+            },
+            {
+                "name": "Mixed Synchronization (Mutex vs @Synchronized)",
+                "description": "CRITICAL: Never mix Coroutine Mutex and JVM @Synchronized on the same shared state. They operate on different levels and don't block each other, leading to race conditions."
+            },
+            {
+                "name": "Double-Prompting in Call Chains",
+                "description": "High risk when one helper builds a prompt and passes it to another helper that also bọc (wraps) its input. Ensure raw prompts are only built once."
             }
         ],
         "conventions": [
@@ -120,7 +151,8 @@
             "Always add DebugLog before/after mutex operations",
             "Non-blocking IO for navigation (NEXT/PREV) operations",
             "Use AppLogger interface instead of static Log calls for testability",
-            "Use HtmlCleaner interface instead of static Html.fromHtml for testability"
+            "Use HtmlCleaner interface instead of static Html.fromHtml for testability",
+            "Standardize Gemini helpers in .data.network.gemini package"
         ]
     }
 }

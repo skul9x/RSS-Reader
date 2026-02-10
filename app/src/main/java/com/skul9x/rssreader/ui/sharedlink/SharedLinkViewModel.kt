@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.skul9x.rssreader.data.model.NewsItem
 import com.skul9x.rssreader.data.network.ArticleContentFetcher
 import com.skul9x.rssreader.data.network.GeminiApiClient
+import com.skul9x.rssreader.data.network.gemini.SummarizeResult
 import com.skul9x.rssreader.service.NewsReaderService
 import com.skul9x.rssreader.utils.ActivityLogger
 import com.skul9x.rssreader.utils.DebugLogger
@@ -124,10 +125,10 @@ class SharedLinkViewModel(application: Application) : AndroidViewModel(applicati
                         
                         // Log Gemini result
                         when (result) {
-                            is GeminiApiClient.SummarizeResult.Success -> {
+                            is SummarizeResult.Success -> {
                                 ActivityLogger.logGeminiSuccess(url, summaryText, result.model)
                             }
-                            is GeminiApiClient.SummarizeResult.Error -> {
+                            is SummarizeResult.Error -> {
                                 ActivityLogger.logGeminiError(url, result.message)
                             }
                             else -> {

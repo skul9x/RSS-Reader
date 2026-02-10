@@ -1,100 +1,55 @@
 {
-    "updated_at": "2026-02-10T17:05:00+07:00",
+    "updated_at": "2026-02-10T19:32:00+07:00",
     "working_on": {
-        "feature": "Gemini API Error Handling",
-        "task": "Implement per-model, per-key quota tracking (429/503)",
+        "feature": "Gemini API Refinement",
+        "task": "Fixed Mixed Synchronization and Double-Prompting bugs. Verified with build.",
         "status": "completed",
         "files": [
             "app/src/main/java/com/skul9x/rssreader/data/network/GeminiApiClient.kt",
-            "app/src/main/java/com/skul9x/rssreader/data/network/ModelQuotaManager.kt",
-            "app/src/test/java/com/skul9x/rssreader/data/network/ModelQuotaManagerTest.kt"
+            "CHANGELOG.md"
         ],
         "blockers": [],
-        "notes": "Implemented ModelQuotaManager with persistence for 429 (30h) and in-memory for 503 (5m). Verified with unit tests."
+        "notes": "Unified synchronization to Mutex. Fixed batch translation prompt wrapping."
     },
-    "pending_tasks": [
-        {
-            "task": "Run on device for final verification",
-            "priority": "high",
-            "notes": "Verify logs show correct behavior"
-        }
-    ],
+    "pending_tasks": [],
     "recent_changes": [
         {
-            "timestamp": "2026-02-10T17:00:00+07:00",
-            "type": "feature",
-            "description": "Implemented robust API error handling for Gemini: 429 errors ban (model, key) for 30 hours, 503 errors cooldown for 5 minutes. Added skip logic to GeminiApiClient.",
-            "files": [
-                "app/src/main/java/com/skul9x/rssreader/data/network/GeminiApiClient.kt",
-                "app/src/main/java/com/skul9x/rssreader/data/network/ModelQuotaManager.kt"
-            ]
-        },
-        {
-            "timestamp": "2026-02-10T16:20:00+07:00",
-            "type": "refactor",
-            "description": "Refactored ArticleContentFetcher (1500+ lines) into 19 smaller files using Facade + Strategy pattern. Reduced main class size by ~85% while maintaining public API compatibility.",
-            "files": [
-                "app/src/main/java/com/skul9x/rssreader/data/network/**"
-            ]
-        },
-        {
-            "timestamp": "2026-02-10T16:15:00+07:00",
+            "timestamp": "2026-02-10T19:30:00+07:00",
             "type": "fix",
-            "description": "Fixed Nested TypeAlias compilation error by moving data classes to top-level.",
+            "description": "Fixed Double-Prompting bug in translateTitleBatch call chain.",
             "files": [
-                "app/src/main/java/com/skul9x/rssreader/data/network/ArticleContentFetcher.kt",
-                "app/src/main/java/com/skul9x/rssreader/ui/settings/HtmlAnalyzerScreen.kt"
+                "app/src/main/java/com/skul9x/rssreader/data/network/GeminiApiClient.kt"
             ]
         },
         {
-            "timestamp": "2026-01-28T15:30:00+07:00",
-            "type": "test",
-            "description": "Created Unit Tests for ArticleContentFetcher. Verified Regex vs Jsoup fallback logic.",
+            "timestamp": "2026-02-10T19:23:00+07:00",
+            "type": "fix",
+            "description": "Fixed Mixed Synchronization (Mutex vs @Synchronized) and removed dead code synchronous methods.",
             "files": [
-                "app/src/test/java/com/skul9x/rssreader/data/network/ArticleContentFetcherTest.kt"
+                "app/src/main/java/com/skul9x/rssreader/data/network/GeminiApiClient.kt"
             ]
         }
     ],
     "errors_encountered": [
         {
-            "error": "Method w in android.util.Log not mocked",
-            "solution": "Used mockkStatic(android.util.Log::class) in Unit Test setup.",
-            "resolved": true,
-            "file": "ModelQuotaManagerTest.kt"
-        },
-        {
-            "error": "Unresolved reference 'any' in mockk",
-            "solution": "Removed explicit import of 'io.mockk.any'.",
+            "error": "Mixed Synchronization (Mutex vs @Synchronized) on shared state",
+            "solution": "Unify on Mutex and remove @Synchronized methods.",
             "resolved": true
         },
         {
-            "error": "Nested and local type aliases are not supported",
-            "solution": "Moved ArticleData and ContentCandidate to top-level classes and updated imports.",
-            "resolved": true,
-            "file": "ArticleContentFetcher.kt"
-        },
-        {
-            "error": "GenericExtractor import ambiguity",
-            "solution": "Standardized imports in ContentExtractorRegistry.",
+            "error": "Double-Prompting in Batch Translation",
+            "solution": "Changed tryTranslate to receive raw prompt and handle wrapping at the specific helper level.",
             "resolved": true
         }
     ],
     "decisions_made": [
         {
-            "decision": "Persist 429 state, Keep 503 in-memory",
-            "reason": "429 is a long-term ban (30h) needing persistence. 503 is transient (5m)."
+            "decision": "Remove synchronous refresh/reset methods",
+            "reason": "They were dead code and used dangerous mixed synchronization patterns."
         },
         {
-            "decision": "Use Facade Pattern",
-            "reason": "Delegate logic from ArticleContentFetcher to new components while keeping public API stable."
-        },
-        {
-            "decision": "Use Strategy Pattern",
-            "reason": "Encapsulate site-specific extraction logic in separate classes."
-        },
-        {
-            "decision": "Move Nested Classes to Top-Level",
-            "reason": "Kotlin doesn't support nested type aliases to same-named classes well, caused compilation error."
+            "decision": "Pass raw prompt to tryTranslate",
+            "reason": "Avoids double-wrapping during batch operations."
         }
     ],
     "skipped_tests": []

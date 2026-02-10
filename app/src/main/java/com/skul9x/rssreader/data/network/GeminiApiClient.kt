@@ -5,6 +5,11 @@ import android.util.Log
 import com.skul9x.rssreader.data.local.ApiKeyManager
 import com.skul9x.rssreader.data.local.AppDatabase
 import com.skul9x.rssreader.data.local.NewsSummary
+import com.skul9x.rssreader.data.network.gemini.ApiResult
+import com.skul9x.rssreader.data.network.gemini.GeminiPrompts
+import com.skul9x.rssreader.data.network.gemini.GeminiResponseHelper
+import com.skul9x.rssreader.data.network.gemini.SuggestClassResult
+import com.skul9x.rssreader.data.network.gemini.SummarizeResult
 import com.skul9x.rssreader.utils.ActivityLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -12,7 +17,6 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import okhttp3.Call
 import okhttp3.Callback
@@ -82,19 +86,6 @@ class GeminiApiClient(context: Context) {
             }
         }
     }
-    
-    /**
-     * Non-suspend version for backward compatibility.
-     * Uses synchronized for thread-safety.
-     */
-    @Synchronized
-    fun refreshApiKeysSync() {
-        apiKeys = apiKeyManager.getApiKeys().toList() // Defensive copy
-        // Reset indices if current index is out of bounds
-        if (apiKeys.isEmpty() || currentApiKeyIndex >= apiKeys.size) {
-            currentApiKeyIndex = 0
-        }
-    }
 
     /**
      * Check if any API keys are configured.
@@ -111,15 +102,6 @@ class GeminiApiClient(context: Context) {
             currentApiKeyIndex = 0
             currentModelIndex = 0
         }
-    }
-    
-    /**
-     * Non-suspend version for backward compatibility.
-     */
-    @Synchronized
-    fun resetSync() {
-        currentApiKeyIndex = 0
-        currentModelIndex = 0
     }
 
     /**
@@ -207,7 +189,8 @@ class GeminiApiClient(context: Context) {
 
                     try {
                         Log.d(TAG, "Trying translation: $model with API key ${keyIndex + 1}/${keys.size}")
-                        val result = tryTranslate(apiKey, model, text)
+                        val translationPrompt = GeminiPrompts.buildTranslationPrompt(text)
+                        val result = tryTranslate(apiKey, model, translationPrompt)
                         
                         when (result) {
                             is ApiResult.Success -> {
@@ -354,8 +337,9 @@ class GeminiApiClient(context: Context) {
     
     /**
      * Try to translate text using Gemini API.
+     * @param prompt Ready-to-use prompt (already built by caller). DO NOT wrap again.
      */
-    private suspend fun tryTranslate(apiKey: String, model: String, text: String): ApiResult {
+    private suspend fun tryTranslate(apiKey: String, model: String, prompt: String): ApiResult {
         val startTime = System.currentTimeMillis()
         
         return try {
@@ -365,12 +349,11 @@ class GeminiApiClient(context: Context) {
                 eventType = "TRANSLATE_START",
                 url = "",
                 message = "Bắt đầu dịch tiêu đề",
-                details = "Model: $model | Text: ${text.take(50)}...",
+                details = "Model: $model | Text: ${prompt.take(50)}...",
                 isError = false
             )
             
-            val prompt = buildTranslationPrompt(text)
-            val requestBody = buildRequestBody(prompt)
+            val requestBody = GeminiResponseHelper.buildRequestBody(prompt)
             
             val request = Request.Builder()
                 .url("$BASE_URL/$model:generateContent?key=$apiKey")
@@ -420,7 +403,7 @@ class GeminiApiClient(context: Context) {
                 
                 when (resp.code) {
                     200 -> {
-                        val rawText = extractText(responseBody)
+                        val rawText = GeminiResponseHelper.extractText(responseBody)
                         val totalDuration = System.currentTimeMillis() - startTime
                         
                         if (rawText.isNotBlank()) {
@@ -496,17 +479,6 @@ class GeminiApiClient(context: Context) {
         }
     }
     
-    /**
-     * Build translation prompt.
-     */
-    private fun buildTranslationPrompt(text: String): String {
-        return """
-Dịch đoạn text sau sang tiếng Việt. Chỉ trả về bản dịch, không giải thích hay thêm bất cứ điều gì khác.
-
-Text: $text
-""".trim()
-    }
-
     /**
      * Summarize with retry using MODEL-FIRST rotation strategy.
      * 
@@ -616,8 +588,8 @@ Text: $text
             // Check if already cancelled before making request
             coroutineContext.ensureActive()
             
-            val prompt = buildSummarizationPrompt(content)
-            val requestBody = buildRequestBody(prompt)
+            val prompt = GeminiPrompts.buildSummarizationPrompt(content)
+            val requestBody = GeminiResponseHelper.buildRequestBody(prompt)
             
             val request = Request.Builder()
                 .url("$BASE_URL/$model:generateContent?key=$apiKey")
@@ -661,9 +633,9 @@ Text: $text
                 
                 when (resp.code) {
                     200 -> {
-                        val rawText = extractText(responseBody)
+                        val rawText = GeminiResponseHelper.extractText(responseBody)
                         if (rawText.isNotBlank()) {
-                            val cleanedText = cleanForTts(rawText)
+                            val cleanedText = GeminiResponseHelper.cleanForTts(rawText)
                             ApiResult.Success(cleanedText)
                         } else {
                             ApiResult.Error("Empty response from API")
@@ -687,148 +659,6 @@ Text: $text
         } catch (e: Exception) {
             Log.e(TAG, "Exception during API call", e)
             ApiResult.Error(e.message ?: "Unknown error")
-        }
-    }
-
-    private fun buildSummarizationPrompt(content: String): String {
-        return """
-Bạn là trợ lý AI chuyên tóm tắt tin tức cho người lái xe. Nhiệm vụ của bạn là tóm tắt nội dung sau thành các ý chính quan trọng nhất, ngắn gọn, súc tích.
-
-YÊU CẦU BẮT BUỘC:
-1. Chỉ trả về nội dung tóm tắt dưới dạng danh sách đánh số (1. 2. 3...).
-2. TUYỆT ĐỐI KHÔNG có bất kỳ câu dẫn dắt, chào hỏi, rào đón hay kết thúc nào (Ví dụ: KHÔNG viết "Dưới đây là tóm tắt...", "Thưa giám đốc...", "Chào bạn...", "Tuyệt vời...").
-3. Vào thẳng nội dung chính ngay lập tức.
-4. Ngôn ngữ tự nhiên, dễ nghe khi đọc bằng giọng nói.
-
-Nội dung cần tóm tắt:
-$content
-""".trim()
-    }
-
-    /**
-     * Clean AI response for TTS: remove markdown formatting but keep numbering.
-     * Uses regex for robust pattern matching with safeguards against infinite loops.
-     */
-    fun cleanForTts(text: String): String {
-        Log.d(TAG, "cleanForTts input length: ${text.length}")
-        Log.d(TAG, "cleanForTts input: $text")
-        
-        var result = text
-        
-        // Remove bold markers: **text** -> text (using regex for safety)
-        result = result.replace(Regex("""\*\*([^*]*)\*\*""")) { it.groupValues[1] }
-        // Remove any remaining orphan ** markers
-        result = result.replace("**", "")
-        
-        // Remove italic markers: *text* -> text (but not ** which is already handled)
-        result = result.replace(Regex("""\*([^*]+)\*""")) { it.groupValues[1] }
-        // Remove any remaining orphan * markers at word boundaries
-        result = result.replace(Regex("""(?<!\*)\*(?!\*)"""), "")
-        
-        // Remove heading markers at start of lines: # ## ### etc
-        result = result.lines().joinToString("\n") { line ->
-            line.trimStart().let { trimmed ->
-                if (trimmed.startsWith("#")) {
-                    trimmed.dropWhile { it == '#' }.trimStart()
-                } else {
-                    line
-                }
-            }
-        }
-        
-        // Remove inline code backticks: `code` -> code (using regex)
-        result = result.replace(Regex("""`([^`]*)`""")) { it.groupValues[1] }
-        // Remove any remaining orphan backticks
-        result = result.replace("`", "")
-        
-        // Remove blockquote markers: > at start of line
-        result = result.lines().joinToString("\n") { line ->
-            if (line.trimStart().startsWith(">")) {
-                line.trimStart().drop(1).trimStart()
-            } else {
-                line
-            }
-        }
-        
-        // Remove bullet points: - or * at start of line (but keep numbered lists)
-        result = result.lines().joinToString("\n") { line ->
-            val trimmed = line.trimStart()
-            if ((trimmed.startsWith("- ") || trimmed.startsWith("* ")) && 
-                trimmed.firstOrNull()?.isDigit() != true) {
-                trimmed.drop(2)
-            } else {
-                line
-            }
-        }
-        
-        // Clean up multiple blank lines (using regex for efficiency)
-        result = result.replace(Regex("""\n{3,}"""), "\n\n")
-        
-        // Clean up multiple spaces (using regex for efficiency)
-        result = result.replace(Regex(""" {2,}"""), " ")
-        
-        result = result.trim()
-        
-        Log.d(TAG, "cleanForTts output length: ${result.length}")
-        Log.d(TAG, "cleanForTts output: $result")
-        
-        return result
-    }
-
-    private fun buildRequestBody(prompt: String): String {
-        val json = buildJsonObject {
-            putJsonArray("contents") {
-                addJsonObject {
-                    putJsonArray("parts") {
-                        addJsonObject {
-                            put("text", prompt)
-                        }
-                    }
-                }
-            }
-            putJsonObject("generationConfig") {
-                put("temperature", 0.7)
-                put("maxOutputTokens", 4096)  // Increased to allow for thinking tokens
-                put("topP", 0.95)
-            }
-            putJsonArray("safetySettings") {
-                addJsonObject {
-                    put("category", "HARM_CATEGORY_HARASSMENT")
-                    put("threshold", "BLOCK_NONE")
-                }
-                addJsonObject {
-                    put("category", "HARM_CATEGORY_HATE_SPEECH")
-                    put("threshold", "BLOCK_NONE")
-                }
-                addJsonObject {
-                    put("category", "HARM_CATEGORY_SEXUALLY_EXPLICIT")
-                    put("threshold", "BLOCK_NONE")
-                }
-                addJsonObject {
-                    put("category", "HARM_CATEGORY_DANGEROUS_CONTENT")
-                    put("threshold", "BLOCK_NONE")
-                }
-            }
-        }
-        return json.toString()
-    }
-
-    private fun extractText(responseBody: String): String {
-        return try {
-            val json = Json.parseToJsonElement(responseBody).jsonObject
-            val candidates = json["candidates"]?.jsonArray ?: return ""
-            if (candidates.isEmpty()) return ""
-            
-            val firstCandidate = candidates[0].jsonObject
-            val content = firstCandidate["content"]?.jsonObject ?: return ""
-            val parts = content["parts"]?.jsonArray ?: return ""
-            if (parts.isEmpty()) return ""
-            
-            val textElement = parts[0].jsonObject["text"] ?: return ""
-            textElement.jsonPrimitive.content.trim()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error extracting text from response", e)
-            ""
         }
     }
 
@@ -868,56 +698,6 @@ $content
         val cooldown = quotaManager.getCooldownCount()
         
         return "API ${safeKeyIndex + 1}/${keys.size} | Model: ${MODELS[safeModelIndex]}\nBlocked: $exhausted | Cooldown: $cooldown"
-    }
-
-    sealed class ApiResult {
-        data class Success(val text: String) : ApiResult()
-        object QuotaExceeded : ApiResult()
-        object ServerBusy : ApiResult()
-        object ModelNotFound : ApiResult()
-        data class Error(val message: String) : ApiResult()
-    }
-
-    sealed class SummarizeResult {
-        data class Success(val text: String, val model: String) : SummarizeResult()
-        object AllQuotaExhausted : SummarizeResult()
-        object NoApiKeys : SummarizeResult()
-        data class Error(val message: String) : SummarizeResult()
-
-        fun getTextOrFallback(): String {
-            return when (this) {
-                is Success -> text
-                is AllQuotaExhausted -> "Xin lỗi, hệ thống đang quá tải. Vui lòng thử lại sau."
-                is NoApiKeys -> "Vui lòng thêm API key Gemini trong Cài đặt."
-                is Error -> "Không thể tóm tắt tin tức. Vui lòng thử lại sau."
-            }
-        }
-    }
-
-    /**
-     * Result class for CSS selector suggestion.
-     */
-    sealed class SuggestClassResult {
-        data class Success(val selector: String, val model: String) : SuggestClassResult()
-        object AllQuotaExhausted : SuggestClassResult()
-        object NoApiKeys : SuggestClassResult()
-        data class Error(val message: String) : SuggestClassResult()
-
-        fun getSelectorOrNull(): String? {
-            return when (this) {
-                is Success -> if (selector != "NOT_FOUND") selector else null
-                else -> null
-            }
-        }
-
-        fun getErrorMessage(): String {
-            return when (this) {
-                is Success -> ""
-                is AllQuotaExhausted -> "Hệ thống đang quá tải. Vui lòng thử lại sau."
-                is NoApiKeys -> "Vui lòng thêm API key Gemini trong Cài đặt."
-                is Error -> message
-            }
-        }
     }
 
     /**
@@ -1034,8 +814,8 @@ $content
                 rawHtml
             }
 
-            val prompt = buildSuggestClassPrompt(truncatedHtml)
-            val requestBody = buildRequestBody(prompt)
+            val prompt = GeminiPrompts.buildSuggestClassPrompt(truncatedHtml)
+            val requestBody = GeminiResponseHelper.buildRequestBody(prompt)
 
             val request = Request.Builder()
                 .url("$BASE_URL/$model:generateContent?key=$apiKey")
@@ -1074,7 +854,7 @@ $content
 
                 when (resp.code) {
                     200 -> {
-                        val rawText = extractText(responseBody)
+                        val rawText = GeminiResponseHelper.extractText(responseBody)
                         if (rawText.isNotBlank()) {
                             // Clean up the response - remove any extra whitespace or quotes
                             val cleanedSelector = rawText
@@ -1106,24 +886,5 @@ $content
             Log.e(TAG, "SuggestClass: Exception during API call", e)
             ApiResult.Error(e.message ?: "Unknown error")
         }
-    }
-
-    /**
-     * Build prompt for suggesting content class.
-     */
-    private fun buildSuggestClassPrompt(rawHtml: String): String {
-        return """
-Bạn là chuyên gia phân tích HTML. Nhiệm vụ của bạn là phân tích HTML sau và tìm CSS class hoặc selector tốt nhất để lấy nội dung chính của bài viết (article content).
-
-YÊU CẦU BẮT BUỘC:
-1. Chỉ trả về ĐÚNG 1 CSS selector duy nhất (ví dụ: .article-content, #main-body, div.post-body, article.content).
-2. TUYỆT ĐỐI KHÔNG trả về giải thích, chỉ trả về selector duy nhất.
-3. Ưu tiên class chứa nội dung bài viết chính, bỏ qua sidebar, menu, header, footer, quảng cáo, comments.
-4. Selector phải tồn tại trong HTML được cung cấp.
-5. Nếu không tìm được class phù hợp, chỉ trả về: NOT_FOUND
-
-HTML để phân tích:
-$rawHtml
-""".trim()
     }
 }

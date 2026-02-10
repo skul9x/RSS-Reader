@@ -28,6 +28,7 @@ import androidx.activity.compose.BackHandler
 import com.skul9x.rssreader.data.network.ArticleContentFetcher
 import com.skul9x.rssreader.data.network.ContentCandidate
 import com.skul9x.rssreader.data.network.GeminiApiClient
+import com.skul9x.rssreader.data.network.gemini.SuggestClassResult
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -569,7 +570,7 @@ $cleanedHtml"""
                                                 val result = geminiClient.suggestContentClass(htmlToAnalyze)
                                                 
                                                 when (result) {
-                                                    is GeminiApiClient.SuggestClassResult.Success -> {
+                                                    is SuggestClassResult.Success -> {
                                                         aiSuggestResult = result.selector
                                                         aiSuggestModel = result.model
                                                         aiSuggestError = ""
