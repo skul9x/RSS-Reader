@@ -1,29 +1,34 @@
 {
-    "updated_at": "2026-02-10T16:30:00+07:00",
+    "updated_at": "2026-02-10T17:05:00+07:00",
     "working_on": {
-        "feature": "Refactor ArticleContentFetcher",
-        "task": "Decompose monolithic class into Facade + Strategy components",
+        "feature": "Gemini API Error Handling",
+        "task": "Implement per-model, per-key quota tracking (429/503)",
         "status": "completed",
         "files": [
-            "app/src/main/java/com/skul9x/rssreader/data/network/ArticleContentFetcher.kt",
-            "app/src/main/java/com/skul9x/rssreader/data/network/HtmlFetcher.kt",
-            "app/src/main/java/com/skul9x/rssreader/data/network/RedirectResolver.kt",
-            "app/src/main/java/com/skul9x/rssreader/data/network/TitleExtractor.kt",
-            "app/src/main/java/com/skul9x/rssreader/data/network/HtmlSanitizer.kt",
-            "app/src/main/java/com/skul9x/rssreader/data/network/ContentExtractorRegistry.kt",
-            "app/src/main/java/com/skul9x/rssreader/data/network/extractors/SiteContentExtractor.kt"
+            "app/src/main/java/com/skul9x/rssreader/data/network/GeminiApiClient.kt",
+            "app/src/main/java/com/skul9x/rssreader/data/network/ModelQuotaManager.kt",
+            "app/src/test/java/com/skul9x/rssreader/data/network/ModelQuotaManagerTest.kt"
         ],
         "blockers": [],
-        "notes": "Successful refactor. Build passed. Tests passed."
+        "notes": "Implemented ModelQuotaManager with persistence for 429 (30h) and in-memory for 503 (5m). Verified with unit tests."
     },
     "pending_tasks": [
         {
-            "task": "Deploy optimized version",
+            "task": "Run on device for final verification",
             "priority": "high",
-            "notes": "Wait for user confirmation"
+            "notes": "Verify logs show correct behavior"
         }
     ],
     "recent_changes": [
+        {
+            "timestamp": "2026-02-10T17:00:00+07:00",
+            "type": "feature",
+            "description": "Implemented robust API error handling for Gemini: 429 errors ban (model, key) for 30 hours, 503 errors cooldown for 5 minutes. Added skip logic to GeminiApiClient.",
+            "files": [
+                "app/src/main/java/com/skul9x/rssreader/data/network/GeminiApiClient.kt",
+                "app/src/main/java/com/skul9x/rssreader/data/network/ModelQuotaManager.kt"
+            ]
+        },
         {
             "timestamp": "2026-02-10T16:20:00+07:00",
             "type": "refactor",
@@ -52,6 +57,17 @@
     ],
     "errors_encountered": [
         {
+            "error": "Method w in android.util.Log not mocked",
+            "solution": "Used mockkStatic(android.util.Log::class) in Unit Test setup.",
+            "resolved": true,
+            "file": "ModelQuotaManagerTest.kt"
+        },
+        {
+            "error": "Unresolved reference 'any' in mockk",
+            "solution": "Removed explicit import of 'io.mockk.any'.",
+            "resolved": true
+        },
+        {
             "error": "Nested and local type aliases are not supported",
             "solution": "Moved ArticleData and ContentCandidate to top-level classes and updated imports.",
             "resolved": true,
@@ -64,6 +80,10 @@
         }
     ],
     "decisions_made": [
+        {
+            "decision": "Persist 429 state, Keep 503 in-memory",
+            "reason": "429 is a long-term ban (30h) needing persistence. 503 is transient (5m)."
+        },
         {
             "decision": "Use Facade Pattern",
             "reason": "Delegate logic from ArticleContentFetcher to new components while keeping public API stable."

@@ -50,6 +50,9 @@ class GeminiApiClient(context: Context) {
     private val apiKeyManager = ApiKeyManager.getInstance(context)
     private val newsSummaryDao = AppDatabase.getDatabase(context).newsSummaryDao()
     
+    // NEW: Quota Manager for tracking 429/503 errors
+    private val quotaManager = ModelQuotaManager(context)
+    
     // Mutex for thread-safe access to mutable state
     private val stateMutex = Mutex()
     
@@ -195,6 +198,10 @@ class GeminiApiClient(context: Context) {
                 for (keyIndex in keys.indices) {
                     val apiKey = keys[keyIndex]
                     
+                    if (!quotaManager.isAvailable(model, apiKey)) {
+                        continue
+                    }
+
                     try {
                         Log.d(TAG, "Trying translation: $model with API key ${keyIndex + 1}/${keys.size}")
                         val result = tryTranslate(apiKey, model, text)
@@ -205,8 +212,14 @@ class GeminiApiClient(context: Context) {
                                 return@withContext result.text
                             }
                             is ApiResult.QuotaExceeded -> {
-                                Log.w(TAG, "Quota exceeded: $model | API ${keyIndex + 1}, trying next API key...")
-                                continue // Try next API key for same model
+                                Log.w(TAG, "Quota exceeded (429): $model | API ${keyIndex + 1}")
+                                quotaManager.markExhausted(model, apiKey)
+                                continue 
+                            }
+                            is ApiResult.ServerBusy -> {
+                                Log.w(TAG, "Server busy (503): $model | API ${keyIndex + 1}")
+                                quotaManager.markCooldown(model, apiKey)
+                                continue
                             }
                             else -> {
                                 Log.w(TAG, "Translation failed: $model | API ${keyIndex + 1}, trying next...")
@@ -270,6 +283,10 @@ class GeminiApiClient(context: Context) {
             for (model in translationModels) {
                 for (keyIndex in keys.indices) {
                     val apiKey = keys[keyIndex]
+                    if (!quotaManager.isAvailable(model, apiKey)) {
+                        continue
+                    }
+
                     try {
                         Log.d(TAG, "Trying batch translation: $model | API ${keyIndex + 1}")
                         val result = tryTranslate(apiKey, model, prompt)
@@ -291,7 +308,14 @@ class GeminiApiClient(context: Context) {
                                     continue
                                 }
                             }
-                            is ApiResult.QuotaExceeded -> continue
+                            is ApiResult.QuotaExceeded -> {
+                                quotaManager.markExhausted(model, apiKey)
+                                continue
+                            }
+                            is ApiResult.ServerBusy -> {
+                                quotaManager.markCooldown(model, apiKey)
+                                continue
+                            }
                             else -> continue
                         }
                     } catch (e: Exception) {
@@ -412,6 +436,16 @@ class GeminiApiClient(context: Context) {
                         )
                         ApiResult.QuotaExceeded
                     }
+                    503 -> {
+                         ActivityLogger.log(
+                            eventType = "TRANSLATE_ERROR",
+                            url = "",
+                            message = "Server Busy (503)",
+                            details = "Model: $model",
+                            isError = true
+                        )
+                        ApiResult.ServerBusy
+                    }
                     else -> {
                         ActivityLogger.log(
                             eventType = "TRANSLATE_ERROR",
@@ -474,6 +508,11 @@ Text: $text
             for (keyIndex in keys.indices) {
                 val apiKey = keys[keyIndex]
                 
+                // Check availability first
+                if (!quotaManager.isAvailable(model, apiKey)) {
+                    continue
+                }
+                
                 Log.d(TAG, "Trying Model: $model | API key ${keyIndex + 1}/${keys.size}")
 
                 val result = tryGenerateContent(apiKey, model, content)
@@ -489,16 +528,22 @@ Text: $text
                         return SummarizeResult.Success(result.text, model)
                     }
                     is ApiResult.QuotaExceeded -> {
-                        Log.w(TAG, "Quota exceeded: $model | API key ${keyIndex + 1}, trying next key...")
-                        continue // Try next API key for same model
+                        Log.w(TAG, "Quota exceeded (429): $model | API key ${keyIndex + 1}")
+                        quotaManager.markExhausted(model, apiKey)
+                        continue 
+                    }
+                    is ApiResult.ServerBusy -> {
+                        Log.w(TAG, "Server busy (503): $model | API key ${keyIndex + 1}")
+                        quotaManager.markCooldown(model, apiKey)
+                        continue
                     }
                     is ApiResult.ModelNotFound -> {
                         Log.w(TAG, "Model not found: $model, skipping to next model...")
-                        break // Skip to next model (all keys will have same result)
+                        break 
                     }
                     is ApiResult.Error -> {
                         Log.e(TAG, "API error: ${result.message} | $model | API key ${keyIndex + 1}")
-                        continue // Try next API key
+                        continue 
                     }
                 }
             }
@@ -589,6 +634,7 @@ Text: $text
                         }
                     }
                     429 -> ApiResult.QuotaExceeded
+                    503 -> ApiResult.ServerBusy
                     404 -> {
                         if (responseBody.contains("not found", ignoreCase = true)) {
                             ApiResult.ModelNotFound
@@ -771,9 +817,27 @@ $content
         return "API ${safeKeyIndex + 1}/${keys.size}, Model: ${MODELS[safeModelIndex]}"
     }
 
+    // Suspend version for detailed status
+    suspend fun getDetailedStatus(): String {
+        val keys = apiKeys
+        val keyIndex = currentApiKeyIndex
+        val modelIndex = currentModelIndex
+        
+        if (keys.isEmpty()) return "Chưa có API key"
+        
+        val safeKeyIndex = if (keyIndex < keys.size) keyIndex else 0
+        val safeModelIndex = if (modelIndex < MODELS.size) modelIndex else 0
+        
+        val exhausted = quotaManager.getExhaustedCount()
+        val cooldown = quotaManager.getCooldownCount()
+        
+        return "API ${safeKeyIndex + 1}/${keys.size} | Model: ${MODELS[safeModelIndex]}\nBlocked: $exhausted | Cooldown: $cooldown"
+    }
+
     sealed class ApiResult {
         data class Success(val text: String) : ApiResult()
         object QuotaExceeded : ApiResult()
+        object ServerBusy : ApiResult()
         object ModelNotFound : ApiResult()
         data class Error(val message: String) : ApiResult()
     }
@@ -860,10 +924,16 @@ $content
             val apiKey = keys[localApiKeyIndex]
             val model = MODELS[localModelIndex]
 
-            Log.d(TAG, "SuggestClass: Trying API key ${localApiKeyIndex + 1}/${keys.size}, Model: $model")
+            // Check availability
+            val result = if (quotaManager.isAvailable(model, apiKey)) {
+                Log.d(TAG, "SuggestClass: Trying API key ${localApiKeyIndex + 1}/${keys.size}, Model: $model")
+                trySuggestContent(apiKey, model, rawHtml)
+            } else {
+                // Log.d(TAG, "Skipping unavailable: $model | Key ${localApiKeyIndex + 1}")
+                null
+            }
 
-            val result = trySuggestContent(apiKey, model, rawHtml)
-
+            // Handle result
             when (result) {
                 is ApiResult.Success -> {
                     // Update shared state with successful indices
@@ -874,52 +944,37 @@ $content
                     return SuggestClassResult.Success(result.text.trim(), model)
                 }
                 is ApiResult.QuotaExceeded -> {
-                    Log.w(TAG, "SuggestClass: Quota exceeded for $model with API key ${localApiKeyIndex + 1}")
-                    val rotated = rotateToNextModelLocal(localModelIndex)
-                    if (rotated != null) {
-                        localModelIndex = rotated
-                    } else {
-                        // All models exhausted for current API key, try next API key
-                        val rotatedKey = rotateToNextApiKeyLocal(localApiKeyIndex, keys.size)
-                        if (rotatedKey != null) {
-                            localApiKeyIndex = rotatedKey
-                            localModelIndex = 0 // Reset model index
-                        } else {
-                            // All API keys exhausted
-                            return SuggestClassResult.AllQuotaExhausted
-                        }
-                    }
+                    Log.w(TAG, "SuggestClass: Quota exceeded (429) for $model")
+                    quotaManager.markExhausted(model, apiKey)
+                }
+                is ApiResult.ServerBusy -> {
+                    Log.w(TAG, "SuggestClass: Server busy (503) for $model")
+                    quotaManager.markCooldown(model, apiKey)
                 }
                 is ApiResult.ModelNotFound -> {
                     Log.w(TAG, "SuggestClass: Model not found: $model")
-                    val rotated = rotateToNextModelLocal(localModelIndex)
-                    if (rotated != null) {
-                        localModelIndex = rotated
-                    } else {
-                        val rotatedKey = rotateToNextApiKeyLocal(localApiKeyIndex, keys.size)
-                        if (rotatedKey != null) {
-                            localApiKeyIndex = rotatedKey
-                            localModelIndex = 0
-                        } else {
-                            return SuggestClassResult.AllQuotaExhausted
-                        }
-                    }
                 }
                 is ApiResult.Error -> {
                     Log.e(TAG, "SuggestClass: API error: ${result.message}")
-                    // Try next model on generic errors
-                    val rotated = rotateToNextModelLocal(localModelIndex)
-                    if (rotated != null) {
-                        localModelIndex = rotated
-                    } else {
-                        val rotatedKey = rotateToNextApiKeyLocal(localApiKeyIndex, keys.size)
-                        if (rotatedKey != null) {
-                            localApiKeyIndex = rotatedKey
-                            localModelIndex = 0
-                        } else {
-                            return SuggestClassResult.Error(result.message)
-                        }
-                    }
+                }
+                null -> {
+                    // Skipped
+                }
+            }
+
+            // Rotation Logic (deduplicated)
+            val rotated = rotateToNextModelLocal(localModelIndex)
+            if (rotated != null) {
+                localModelIndex = rotated
+            } else {
+                // All models exhausted for current API key, try next API key
+                val rotatedKey = rotateToNextApiKeyLocal(localApiKeyIndex, keys.size)
+                if (rotatedKey != null) {
+                    localApiKeyIndex = rotatedKey
+                    localModelIndex = 0 // Reset model index
+                } else {
+                    // All API keys exhausted
+                    return SuggestClassResult.AllQuotaExhausted
                 }
             }
 
@@ -997,6 +1052,7 @@ $content
                         }
                     }
                     429 -> ApiResult.QuotaExceeded
+                    503 -> ApiResult.ServerBusy
                     404 -> {
                         if (responseBody.contains("not found", ignoreCase = true)) {
                             ApiResult.ModelNotFound

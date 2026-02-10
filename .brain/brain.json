@@ -14,7 +14,8 @@
             "ui": "Jetpack Compose"
         },
         "backend": {
-            "local_db": "Room"
+            "local_db": "Room",
+            "api": "Gemini API"
         },
         "tools": [
             "Gradle",
@@ -28,6 +29,11 @@
     },
     "api_endpoints": [],
     "features": [
+        {
+            "name": "Gemini API Error Handling",
+            "status": "Active",
+            "details": "Handles 429 (Quota Exceeded) with 30-hour persistent ban and 503 (Server Busy) with 5-minute cooldown per model/key."
+        },
         {
             "name": "News Reading",
             "status": "Active",
@@ -55,6 +61,10 @@
     "knowledge_items": {
         "patterns": [
             {
+                "name": "Quota Management",
+                "description": "Use ModelQuotaManager to track availability of resources (API keys/Models) to prevent wasted calls."
+            },
+            {
                 "name": "Service-based Architecture",
                 "description": "NewsReaderService handles background playback"
             },
@@ -72,6 +82,10 @@
             }
         ],
         "gotchas": [
+            {
+                "name": "Mocking Static Log Methods",
+                "description": "Use mockkStatic(android.util.Log::class) to prevent 'Method not mocked' errors in unit tests checking logs."
+            },
             {
                 "name": "Media Button Blocking",
                 "description": "Avoid using flags for debouncing async media events. Use Mutex.tryLock() with strictly enforced try-finally blocks."
