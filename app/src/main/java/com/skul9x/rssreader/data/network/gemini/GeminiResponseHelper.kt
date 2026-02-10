@@ -27,6 +27,11 @@ object GeminiResponseHelper {
                 put("temperature", temperature)
                 put("maxOutputTokens", maxOutputTokens)
                 put("topP", 0.95)
+                // Disable thinking to avoid thinking tokens in response
+                // Gemini 2.5/3 models have thinking enabled by default
+                putJsonObject("thinkingConfig") {
+                    put("thinkingBudget", 0)
+                }
             }
             putJsonArray("safetySettings") {
                 addJsonObject {
@@ -52,6 +57,8 @@ object GeminiResponseHelper {
 
     /**
      * Extract text from Gemini JSON response.
+     * Skips thinking parts (thought: true) that Gemini 2.5/3 models may return.
+     * Iterates from last part to first since actual content comes after thinking parts.
      */
     fun extractText(responseBody: String): String {
         return try {
@@ -64,8 +71,17 @@ object GeminiResponseHelper {
             val parts = content["parts"]?.jsonArray ?: return ""
             if (parts.isEmpty()) return ""
             
-            val textElement = parts[0].jsonObject["text"] ?: return ""
-            textElement.jsonPrimitive.content.trim()
+            // Iterate from last to first: actual content is after thinking parts
+            for (i in parts.lastIndex downTo 0) {
+                val part = parts[i].jsonObject
+                // Skip thinking parts (Gemini 2.5/3 thinking feature)
+                val isThought = part["thought"]?.jsonPrimitive?.booleanOrNull == true
+                if (!isThought) {
+                    val text = part["text"]?.jsonPrimitive?.content?.trim()
+                    if (!text.isNullOrBlank()) return text
+                }
+            }
+            ""
         } catch (e: Exception) {
             Log.e(TAG, "Error extracting text from response", e)
             ""

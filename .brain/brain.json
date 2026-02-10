@@ -106,6 +106,10 @@
         ],
         "gotchas": [
             {
+                "name": "Gemini Thinking Tokens (2.5+ Models)",
+                "description": "Models like gemini-2.5-flash return reasoning in parts[0] by default. MUST iterate through all 'parts' and skip those with 'thought: true' to get actual content."
+            },
+            {
                 "name": "Mocking Static Log Methods",
                 "description": "Use mockkStatic(android.util.Log::class) to prevent 'Method not mocked' errors in unit tests checking logs."
             },

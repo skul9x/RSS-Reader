@@ -1,8 +1,8 @@
 {
-    "updated_at": "2026-02-10T19:32:00+07:00",
+    "updated_at": "2026-02-10T19:42:00+07:00",
     "working_on": {
-        "feature": "Gemini API Refinement",
-        "task": "Fixed Mixed Synchronization and Double-Prompting bugs. Verified with build.",
+        "feature": "Gemini API Thinking Fix",
+        "task": "Fixed thinking token bug by disabling thinkingBudget and filtering response parts.",
         "status": "completed",
         "files": [
             "app/src/main/java/com/skul9x/rssreader/data/network/GeminiApiClient.kt",
@@ -13,6 +13,14 @@
     },
     "pending_tasks": [],
     "recent_changes": [
+        {
+            "timestamp": "2026-02-10T19:42:00+07:00",
+            "type": "fix",
+            "description": "Fixed Gemini 2.5/3 thinking tokens bug: disabled thinking and filtered parts in extractText.",
+            "files": [
+                "app/src/main/java/com/skul9x/rssreader/data/network/gemini/GeminiResponseHelper.kt"
+            ]
+        },
         {
             "timestamp": "2026-02-10T19:30:00+07:00",
             "type": "fix",
