@@ -678,12 +678,27 @@ class NewsReaderService : Service() {
                     
                     if (!isActive) break
                     
+                    // Store full text for resume and split into sentences
+                    currentFullText = summaryText
+                    val sentences = ttsManager.splitTextIntoSentences(summaryText)
+                    
                     // Speak summary
                     _serviceState.update { it.copy(currentSummary = summaryText) }
-                    ttsManager.speakAndWait(summaryText)
                     
-                    // Mark completed
-                    isItemCompleted = true
+                    // Use sentence-based TTS for resume support
+                    val completedNormally = ttsManager.speakSentencesAndWait(sentences)
+                    
+                    if (completedNormally) {
+                        isItemCompleted = true
+                        
+                        // Clear resume state on successful completion
+                        clearResumeState()
+                        ttsManager.resetSentenceTracking()
+                    } else {
+                        // Reading was interrupted (phone call, etc.)
+                        DebugLogger.log(TAG, ">>> ReadAll item interrupted, keeping resume state")
+                        return@launch
+                    }
                     
                     // Pause between items
                     if (index < itemsToRead.size - 1) {

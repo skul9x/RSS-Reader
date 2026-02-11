@@ -172,7 +172,7 @@ class GeminiApiClient(context: Context) {
         )
         
         return withContext(Dispatchers.IO) {
-            val keys = apiKeys.toList()
+            val keys = stateMutex.withLock { apiKeys.toList() }
             if (keys.isEmpty()) {
                 Log.w(TAG, "No API keys for translation")
                 return@withContext text
@@ -254,7 +254,7 @@ class GeminiApiClient(context: Context) {
         )
         
         return withContext(Dispatchers.IO) {
-            val keys = apiKeys.toList()
+            val keys = stateMutex.withLock { apiKeys.toList() }
             if (keys.isEmpty()) {
                 Log.w(TAG, "No API keys for translation")
                 return@withContext emptyMap()
@@ -563,20 +563,51 @@ class GeminiApiClient(context: Context) {
         return SummarizeResult.AllQuotaExhausted
     }
     
-    /**
-     * Local rotation helper - returns new index or null if exhausted.
-     */
-    private fun rotateToNextModelLocal(currentIndex: Int): Int? {
-        val nextIndex = currentIndex + 1
-        return if (nextIndex < MODELS.size) nextIndex else null
-    }
-    
-    /**
-     * Local rotation helper - returns new index or null if exhausted.
-     */
-    private fun rotateToNextApiKeyLocal(currentIndex: Int, keysSize: Int): Int? {
-        val nextIndex = currentIndex + 1
-        return if (nextIndex < keysSize) nextIndex else null
+    private suspend fun suggestWithRetry(rawHtml: String): SuggestClassResult {
+        val keys = stateMutex.withLock { apiKeys.toList() }
+        if (keys.isEmpty()) return SuggestClassResult.NoApiKeys
+
+        // MODEL-FIRST strategy: try same model across all keys first
+        for (modelIndex in MODELS.indices) {
+            val model = MODELS[modelIndex]
+            for (keyIndex in keys.indices) {
+                val apiKey = keys[keyIndex]
+                
+                if (!quotaManager.isAvailable(model, apiKey)) {
+                    continue
+                }
+
+                Log.d(TAG, "SuggestClass: Trying Model: $model | API key ${keyIndex + 1}/${keys.size}")
+                val result = trySuggestContent(apiKey, model, rawHtml)
+
+                when (result) {
+                    is ApiResult.Success -> {
+                        stateMutex.withLock {
+                            currentApiKeyIndex = keyIndex
+                            currentModelIndex = modelIndex
+                        }
+                        return SuggestClassResult.Success(result.text.trim(), model)
+                    }
+                    is ApiResult.QuotaExceeded -> {
+                        Log.w(TAG, "SuggestClass: Quota exceeded (429) for $model")
+                        quotaManager.markExhausted(model, apiKey)
+                    }
+                    is ApiResult.ServerBusy -> {
+                        Log.w(TAG, "SuggestClass: Server busy (503) for $model")
+                        quotaManager.markCooldown(model, apiKey)
+                    }
+                    is ApiResult.ModelNotFound -> {
+                        Log.w(TAG, "SuggestClass: Model not found: $model")
+                        break // Try next model
+                    }
+                    is ApiResult.Error -> {
+                        Log.e(TAG, "SuggestClass: API error: ${result.message}")
+                    }
+                }
+            }
+        }
+
+        return SuggestClassResult.AllQuotaExhausted
     }
 
     /**
@@ -714,91 +745,6 @@ class GeminiApiClient(context: Context) {
         }
     }
 
-    private suspend fun suggestWithRetry(rawHtml: String): SuggestClassResult {
-        // Thread-safe read of current state
-        val (keys, startApiKeyIndex, startModelIndex) = stateMutex.withLock {
-            Triple(apiKeys.toList(), currentApiKeyIndex, currentModelIndex)
-        }
-
-        // Check if any API keys are configured
-        if (keys.isEmpty()) {
-            return SuggestClassResult.NoApiKeys
-        }
-
-        var localApiKeyIndex = startApiKeyIndex
-        var localModelIndex = startModelIndex
-
-        do {
-            // Bounds check before accessing
-            if (localApiKeyIndex >= keys.size) {
-                localApiKeyIndex = 0
-            }
-            if (localModelIndex >= MODELS.size) {
-                localModelIndex = 0
-            }
-
-            val apiKey = keys[localApiKeyIndex]
-            val model = MODELS[localModelIndex]
-
-            // Check availability
-            val result = if (quotaManager.isAvailable(model, apiKey)) {
-                Log.d(TAG, "SuggestClass: Trying API key ${localApiKeyIndex + 1}/${keys.size}, Model: $model")
-                trySuggestContent(apiKey, model, rawHtml)
-            } else {
-                // Log.d(TAG, "Skipping unavailable: $model | Key ${localApiKeyIndex + 1}")
-                null
-            }
-
-            // Handle result
-            when (result) {
-                is ApiResult.Success -> {
-                    // Update shared state with successful indices
-                    stateMutex.withLock {
-                        currentApiKeyIndex = localApiKeyIndex
-                        currentModelIndex = localModelIndex
-                    }
-                    return SuggestClassResult.Success(result.text.trim(), model)
-                }
-                is ApiResult.QuotaExceeded -> {
-                    Log.w(TAG, "SuggestClass: Quota exceeded (429) for $model")
-                    quotaManager.markExhausted(model, apiKey)
-                }
-                is ApiResult.ServerBusy -> {
-                    Log.w(TAG, "SuggestClass: Server busy (503) for $model")
-                    quotaManager.markCooldown(model, apiKey)
-                }
-                is ApiResult.ModelNotFound -> {
-                    Log.w(TAG, "SuggestClass: Model not found: $model")
-                }
-                is ApiResult.Error -> {
-                    Log.e(TAG, "SuggestClass: API error: ${result.message}")
-                }
-                null -> {
-                    // Skipped
-                }
-            }
-
-            // Rotation Logic (deduplicated)
-            val rotated = rotateToNextModelLocal(localModelIndex)
-            if (rotated != null) {
-                localModelIndex = rotated
-            } else {
-                // All models exhausted for current API key, try next API key
-                val rotatedKey = rotateToNextApiKeyLocal(localApiKeyIndex, keys.size)
-                if (rotatedKey != null) {
-                    localApiKeyIndex = rotatedKey
-                    localModelIndex = 0 // Reset model index
-                } else {
-                    // All API keys exhausted
-                    return SuggestClassResult.AllQuotaExhausted
-                }
-            }
-
-            // Prevent infinite loop - check if we've cycled through all combinations
-        } while (localApiKeyIndex != startApiKeyIndex || localModelIndex != startModelIndex)
-
-        return SuggestClassResult.AllQuotaExhausted
-    }
 
     /**
      * Try to get content class suggestion from Gemini API.
