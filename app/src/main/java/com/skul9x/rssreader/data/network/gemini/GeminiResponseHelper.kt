@@ -71,17 +71,20 @@ object GeminiResponseHelper {
             val parts = content["parts"]?.jsonArray ?: return ""
             if (parts.isEmpty()) return ""
             
-            // Iterate from last to first: actual content is after thinking parts
-            for (i in parts.lastIndex downTo 0) {
-                val part = parts[i].jsonObject
+            // Collect all non-thinking text parts (in order)
+            val result = StringBuilder()
+            for (part in parts) {
+                val partObj = part.jsonObject
                 // Skip thinking parts (Gemini 2.5/3 thinking feature)
-                val isThought = part["thought"]?.jsonPrimitive?.booleanOrNull == true
+                val isThought = partObj["thought"]?.jsonPrimitive?.booleanOrNull == true
                 if (!isThought) {
-                    val text = part["text"]?.jsonPrimitive?.content?.trim()
-                    if (!text.isNullOrBlank()) return text
+                    val text = partObj["text"]?.jsonPrimitive?.content
+                    if (!text.isNullOrBlank()) {
+                        result.append(text)
+                    }
                 }
             }
-            ""
+            result.toString().trim()
         } catch (e: Exception) {
             Log.e(TAG, "Error extracting text from response", e)
             ""

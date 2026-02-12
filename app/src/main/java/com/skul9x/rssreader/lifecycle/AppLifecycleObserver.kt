@@ -13,7 +13,8 @@ import kotlinx.coroutines.launch
  * Ensures pending read statuses are synced before app is potentially killed.
  */
 class AppLifecycleObserver(
-    private val batchQueueManager: BatchQueueManager
+    private val batchQueueManager: BatchQueueManager,
+    private val scope: CoroutineScope
 ) : DefaultLifecycleObserver {
     
     companion object {
@@ -22,9 +23,9 @@ class AppLifecycleObserver(
 
     override fun onStop(owner: LifecycleOwner) {
         super.onStop(owner)
-        // App going to background → Flush queue
+        // App going to background → Flush queue using persistent application scope
         Log.d(TAG, "App going to background, flushing queue")
-        CoroutineScope(Dispatchers.IO).launch {
+        scope.launch {
             try {
                 batchQueueManager.forceFlush()
                 Log.d(TAG, "Queue flushed successfully")

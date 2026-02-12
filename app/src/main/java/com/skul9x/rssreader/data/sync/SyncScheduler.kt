@@ -18,6 +18,7 @@ class SyncScheduler(private val context: Context) {
         private const val TAG = "SyncScheduler"
         private const val PERIODIC_WORK_NAME = "PeriodicReadStatusSync"
         private const val ONE_TIME_WORK_NAME = "OneTimeReadStatusSync"
+        private const val IMMEDIATE_WORK_NAME = "ImmediateReadStatusSync"
         
         // Android minimum for periodic work is 15 minutes
         // We use one-time work chaining for ~5 minute intervals
@@ -100,7 +101,11 @@ class SyncScheduler(private val context: Context) {
             .addTag(SyncWorker.WORK_NAME)
             .build()
         
-        workManager.enqueue(syncRequest)
+        workManager.enqueueUniqueWork(
+            IMMEDIATE_WORK_NAME,
+            ExistingWorkPolicy.REPLACE,
+            syncRequest
+        )
         Log.d(TAG, "Triggered immediate sync")
     }
 

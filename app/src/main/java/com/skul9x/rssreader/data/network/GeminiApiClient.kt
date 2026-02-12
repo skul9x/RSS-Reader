@@ -195,6 +195,7 @@ class GeminiApiClient(context: Context) {
                         when (result) {
                             is ApiResult.Success -> {
                                 Log.d(TAG, "Translation successful: $model | API ${keyIndex + 1}")
+                                stateMutex.withLock { currentApiKeyIndex = keyIndex }
                                 return@withContext result.text
                             }
                             is ApiResult.QuotaExceeded -> {
@@ -260,9 +261,9 @@ class GeminiApiClient(context: Context) {
                 return@withContext emptyMap()
             }
             
-            // Build the batch prompt
-            val itemsJson = titles.entries.joinToString(",\n") { (id, title) ->
-                "\"$id\": \"${title.replace("\"", "\\\"")}\""
+            // Build the batch prompt using safe JSON construction
+            val inputJsonObject = buildJsonObject {
+                titles.forEach { (id, title) -> put(id, title) }
             }
             val prompt = """
                 Dịch các tiêu đề sau sang tiếng Việt. 
@@ -270,9 +271,7 @@ class GeminiApiClient(context: Context) {
                 Giữ nguyên ID. Chỉ dịch giá trị.
                 
                 Input:
-                {
-                $itemsJson
-                }
+                $inputJsonObject
             """.trimIndent()
             
             // Strategy: Try models
@@ -289,8 +288,16 @@ class GeminiApiClient(context: Context) {
                         
                         when (result) {
                             is ApiResult.Success -> {
-                                val jsonStr = result.text.substringAfter("{").substringBeforeLast("}")
-                                val fullJson = "{$jsonStr}"
+                                // Strip markdown code blocks if present (```json ... ```)
+                                val cleaned = result.text
+                                    .replace(Regex("```json\\s*"), "")
+                                    .replace(Regex("```\\s*"), "")
+                                    .trim()
+                                
+                                // Find outermost JSON object using regex
+                                val jsonMatch = Regex("\\{[\\s\\S]*\\}").find(cleaned)
+                                val fullJson = jsonMatch?.value ?: "{}"
+                                
                                 try {
                                     val parsed = Json.parseToJsonElement(fullJson).jsonObject
                                     val resultMap = parsed.entries.associate { (k, v) ->
@@ -300,7 +307,6 @@ class GeminiApiClient(context: Context) {
                                     return@withContext resultMap
                                 } catch (e: Exception) {
                                     Log.e(TAG, "Failed to parse batch response", e)
-                                    // Try next pattern if parsing fails? Or just continue to next model?
                                     continue
                                 }
                             }
@@ -619,7 +625,14 @@ class GeminiApiClient(context: Context) {
             // Check if already cancelled before making request
             coroutineContext.ensureActive()
             
-            val prompt = GeminiPrompts.buildSummarizationPrompt(content)
+            // Truncate content to prevent exceeding model context window
+            val truncatedContent = if (content.length > 100_000) {
+                content.take(100_000) + "\n... [NỘI DUNG ĐÃ CẮT BỚT]"
+            } else {
+                content
+            }
+            
+            val prompt = GeminiPrompts.buildSummarizationPrompt(truncatedContent)
             val requestBody = GeminiResponseHelper.buildRequestBody(prompt)
             
             val request = Request.Builder()

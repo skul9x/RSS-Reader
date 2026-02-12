@@ -10,7 +10,6 @@ import com.skul9x.rssreader.data.remote.FirestoreSyncRepository
 import com.skul9x.rssreader.data.repository.FirebaseLogRepository
 import com.skul9x.rssreader.data.repository.LocalSyncRepository
 import com.skul9x.rssreader.data.sync.SyncCoordinator
-import com.skul9x.rssreader.data.sync.SyncScheduler
 
 /**
  * WorkManager Worker for background sync of read status.
@@ -38,11 +37,8 @@ class SyncWorker(
             val firestoreRepo = FirestoreSyncRepository.getInstance(logRepo)
             val syncCoordinator = SyncCoordinator.getInstance(localRepo, firestoreRepo, logRepo)
             
-            syncCoordinator.performFullSyncWithRetry()
+            syncCoordinator.performFullSync()
             Log.d(TAG, "Sync completed successfully")
-
-            // Chain next sync in 5 minutes
-            SyncScheduler(applicationContext).scheduleNextSync()
 
             Result.success()
         } catch (e: Exception) {
@@ -52,8 +48,6 @@ class SyncWorker(
                 Result.retry()
             } else {
                 Log.e(TAG, "Max retries reached, giving up")
-                // Still schedule next sync cycle even if this specific one failed max retries
-                SyncScheduler(applicationContext).scheduleNextSync()
                 Result.failure()
             }
         }

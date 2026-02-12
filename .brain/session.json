@@ -1,72 +1,90 @@
 {
-    "updated_at": "2026-02-11T11:05:00+07:00",
+    "updated_at": "2026-02-11T11:28:00+07:00",
     "working_on": {
-        "feature": "Firebase Cloud-Device Sync",
-        "task": "Fixed 4 Medium severity logic bugs (M1-M4) in sync flow.",
-        "status": "completed",
+        "feature": "Sync Flow Bug Fixes",
+        "task": "Fixed 3 High and 4 Medium priority bugs in Firebase sync system.",
+        "status": "All Critical/Medium Bugs Resolved",
         "files": [
             "app/src/main/java/com/skul9x/rssreader/data/sync/SyncCoordinator.kt",
-            "app/src/main/java/com/skul9x/rssreader/data/sync/BatchQueueManager.kt",
-            "app/src/main/java/com/skul9x/rssreader/data/local/ReadNewsDao.kt",
-            "app/src/test/java/com/skul9x/rssreader/data/sync/SyncCoordinatorTest.kt"
+            "app/src/main/java/com/skul9x/rssreader/data/sync/SyncScheduler.kt",
+            "app/src/main/java/com/skul9x/rssreader/worker/SyncWorker.kt",
+            "app/src/main/java/com/skul9x/rssreader/data/repository/LocalSyncRepository.kt",
+            "app/src/main/java/com/skul9x/rssreader/data/local/ReadNewsDao.kt"
         ],
         "blockers": [],
-        "notes": "Verified with 7/7 Unit Tests passing."
+        "notes": "Verified with SyncCoordinatorTest and compileDebugKotlin."
     },
     "pending_tasks": [
         {
-            "task": "L1: Ensure SyncScheduler.triggerImmediateSync uses unique work name",
+            "task": "BUG 1: Remove redundant PENDING check in SQL",
             "priority": "low"
         },
         {
-            "task": "L2: Improve BatchQueueManager persistence (handle killed process)",
-            "priority": "low"
-        },
-        {
-            "task": "L3: Fix strictly-greater-than boundary in downloadSince query",
-            "priority": "low"
-        },
-        {
-            "task": "Clean up deprecated Android APIs warnings in GeminiApiClient",
+            "task": "UI: Add Sync Indicator to main screen",
             "priority": "low"
         }
     ],
     "recent_changes": [
         {
-            "timestamp": "2026-02-11T10:55:00+07:00",
+            "timestamp": "2026-02-12T18:30:00+07:00",
             "type": "fix",
-            "description": "Fixed 4 Medium bugs: M1 (Ordering), M2 (Atomic Merge), M3 (Batch Race Condition), M4 (DAO Guard).",
+            "description": "Fixed 3 High and 4 Medium sync bugs (BUG 2, 3, 4, 5, 6, 8, 10). Optimized DB writes, fixed polling loops, and ensured data safety on sign-out/background.",
             "files": [
                 "app/src/main/java/com/skul9x/rssreader/data/sync/SyncCoordinator.kt",
-                "app/src/main/java/com/skul9x/rssreader/data/sync/BatchQueueManager.kt"
+                "app/src/main/java/com/skul9x/rssreader/data/sync/SyncScheduler.kt",
+                "app/src/main/java/com/skul9x/rssreader/worker/SyncWorker.kt",
+                "app/src/main/java/com/skul9x/rssreader/data/local/ReadNewsDao.kt",
+                "app/src/main/java/com/skul9x/rssreader/RssApplication.kt"
             ]
         },
         {
-            "timestamp": "2026-02-11T10:05:00+07:00",
-            "type": "fix",
-            "description": "Fixed Silent Download Failures and added Authentication Guard to SyncCoordinator.",
+            "timestamp": "2026-02-11T14:45:00+07:00",
+            "type": "audit",
+            "description": "Verified 10 bug claims in Sync flow. 8/10 confirmed. High risks: BUG 3 (Polling loop) and BUG 4 (Non-unique work).",
             "files": [
-                "app/src/main/java/com/skul9x/rssreader/data/sync/SyncCoordinator.kt",
-                "app/src/main/java/com/skul9x/rssreader/data/remote/FirestoreSyncRepository.kt"
+                ".brain/audit_verification.md"
+            ]
+        },
+        {
+            "timestamp": "2026-02-11T11:25:00+07:00",
+            "type": "fix",
+            "description": "Fixed 4 Medium bugs: M1 (Regex JSON), M3 (Key Hashing), M4 (Smart WakeLock), M5 (Android 8+ Service).",
+            "files": [
+                "app/src/main/java/com/skul9x/rssreader/data/network/GeminiApiClient.kt",
+                "app/src/main/java/com/skul9x/rssreader/data/network/ModelQuotaManager.kt",
+                "app/src/main/java/com/skul9x/rssreader/service/NewsReaderService.kt"
+            ]
+        },
+        {
+            "timestamp": "2026-02-11T11:15:00+07:00",
+            "type": "fix",
+            "description": "Fixed 3 High bugs: H1 (Rotation), H2 (Mutex Translate), H3 (Sentence Tracking).",
+            "files": [
+                "app/src/main/java/com/skul9x/rssreader/data/network/GeminiApiClient.kt",
+                "app/src/main/java/com/skul9x/rssreader/service/NewsReaderService.kt"
             ]
         }
     ],
     "errors_encountered": [
         {
-            "error": "M1: Duplicate upload if merge fails later",
-            "solution": "Moved markAsSynced immediately after upload",
+            "error": "H1: Missed combinations in suggestWithRetry due to start index dependency",
+            "solution": "Rewrote to sequential nested for-loop (Model-First)",
             "resolved": true
         },
         {
-            "error": "M3: BatchQueue race condition (drain outside lock)",
-            "solution": "Redesigned to drain and return snapshot inside mutex",
+            "error": "M5: Service crash on Android 8+ when started from background",
+            "solution": "Added Build.VERSION check and used startForegroundService",
             "resolved": true
         }
     ],
     "decisions_made": [
         {
-            "decision": "Prioritize markAsSynced over download complete",
-            "reason": "Prevents redundant network traffic if subsequent steps in the sync chain fail."
+            "decision": "Use SHA-256 for API key lookup keys",
+            "reason": "Prevents leaking raw secrets in SharedPreferences while still allowing lookup."
+        },
+        {
+            "decision": "Standardize on MODEL-FIRST rotation",
+            "reason": "Prioritizes response quality over everything else."
         }
     ],
     "skipped_tests": []

@@ -28,6 +28,10 @@ class FirestoreSyncRepository private constructor(
                 if (logRepo != null) instance.setLogRepo(logRepo)
             }
         }
+
+        fun resetInstance() {
+            INSTANCE = null
+        }
     }
 
     private val firestore = FirebaseFirestore.getInstance()
@@ -83,7 +87,10 @@ class FirestoreSyncRepository private constructor(
     suspend fun downloadSince(sinceTimestamp: Long): Pair<List<ReadNewsItem>, Long> {
         try {
             val query = if (sinceTimestamp > 0) {
-                getUserCollection().whereGreaterThan("updatedAt", java.util.Date(sinceTimestamp))
+                // Use >= with the exact timestamp to catch items at the boundary.
+                // Firestore has nanosecond precision but we store milliseconds,
+                // so items exactly at the boundary would be missed with >.
+                getUserCollection().whereGreaterThanOrEqualTo("updatedAt", java.util.Date(sinceTimestamp))
             } else {
                 getUserCollection() // Full sync for first run
             }

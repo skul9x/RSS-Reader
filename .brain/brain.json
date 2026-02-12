@@ -71,6 +71,16 @@
             "name": "Activity Log Management",
             "status": "Active",
             "details": "Supports filtering by All, Errors, and Gemini events. Automatically cleans up logs older than 7 days."
+        },
+        {
+            "name": "Robust JSON Parsing",
+            "status": "Fixed",
+            "details": "Uses Regex-based extraction to reliably parse JSON from Gemini's markdown code block responses."
+        },
+        {
+            "name": "Sentence-level TTS Resume",
+            "status": "Fixed",
+            "details": "Splits text into sentences to allow precise resuming mid-article after interruptions (calls, focus loss)."
         }
     ],
     "knowledge_items": {
@@ -106,6 +116,38 @@
             {
                 "name": "Batch Operation Chunking",
                 "description": "Always chunk large data operations (upload/delete/write) when dealing with external API limits (e.g., Firestore 500-op limit). Chunk at 400 for a safe margin."
+            },
+            {
+                "name": "Model-First Rotation",
+                "description": "Strategy for multi-model/multi-key APIs: try all keys for the highest quality model first, then fall back to lower tier models. Ensures best results within quota limits."
+            },
+            {
+                "name": "SHA-256 Key Hashing for Storage",
+                "description": "Never store API keys or secrets in plaintext in SharedPreferences/Settings. Use truncated SHA-256 hashes as lookup keys instead."
+            },
+            {
+                "name": "WorkManager Unique Work",
+                "description": "Always use `enqueueUniqueWork` for operations that manipulate state to prevent race conditions from concurrent workers."
+            },
+            {
+                "name": "Avoid Recursive Scheduling",
+                "description": "Do not mix PeriodicWork and OneTimeWork self-chaining for the same task, as it creates uncontrolled polling loops."
+            },
+            {
+                "name": "Single Transaction Batch SQL",
+                "description": "Wrap N separate inserts in a @Transaction block to ensure the OS only performs one fsync, dramatically increasing I/O performance."
+            },
+            {
+                "name": "Persistent Application Scope",
+                "description": "Use a SupervisorJob scope tied to the Application lifecycle for critical fire-and-forget tasks (like onStop cloud flush) to prevent cancellation during activity death."
+            },
+            {
+                "name": "Inclusive Cursor Bounds",
+                "description": "When syncing by timestamp, use `>=` with a 1ms buffer to ensure no items are skipped if they were updated at the exact same millisecond as the cursor."
+            },
+            {
+                "name": "Global Lifecycle Cleanup",
+                "description": "Coordinate multi-module state reset (Singletons, DB, WorkManager) in an Application-level onSignOut method to ensure user data isolation."
             }
         ],
         "gotchas": [
@@ -164,6 +206,14 @@
             {
                 "name": "Earliest Wins Conflict Resolution",
                 "description": "For 'Read Status' sync, the earliest timestamp is the source of truth (the moment the user first read the item). Logic must use `remote < local` comparison."
+            },
+            {
+                "name": "Hard WakeLock Battery Drain",
+                "description": "Holding a WakeLock with a hard timeout (e.g., 30 mins) prevents the CPU from sleeping even if task finishes. Use a dynamic monitor that polls state and releases early."
+            },
+            {
+                "name": "Android 8+ Service Background Start",
+                "description": "Calling startService() when the app is in the background on Android 8+ will crash with BackgroundServiceStartNotAllowedException. Use startForegroundService() instead."
             }
         ],
         "conventions": [
@@ -173,7 +223,8 @@
             "Use AppLogger interface instead of static Log calls for testability",
             "Use HtmlCleaner interface instead of static Html.fromHtml for testability",
             "Standardize Gemini helpers in .data.network.gemini package",
-            "Chunk all Firestore batch operations at 400 items"
+            "Chunk all Firestore batch operations at 400 items",
+            "Hash secrets (API keys) before using them as keys in persistent storage."
         ]
     }
 }

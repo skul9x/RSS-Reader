@@ -140,6 +140,19 @@ class SyncPreferences private constructor(private val context: Context) {
         }
 
     /**
+     * Clear all sync-related preferences.
+     * Called on user sign-out to ensure a clean slate for the next user.
+     */
+    suspend fun clearSyncData() {
+        context.syncDataStore.edit { preferences ->
+            preferences[PreferenceKeys.LAST_SYNC_TIME] = 0L
+            preferences[PreferenceKeys.LAST_DOWNLOAD_TIMESTAMP] = 0L
+            preferences[PreferenceKeys.LAST_CLEANUP_DATE] = 0L
+            preferences[PreferenceKeys.PENDING_SYNC_COUNT] = 0
+        }
+    }
+
+    /**
      * Set device type.
      */
     suspend fun setDeviceType(type: String) {

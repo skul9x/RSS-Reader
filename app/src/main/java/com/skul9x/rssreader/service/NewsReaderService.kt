@@ -454,9 +454,7 @@ class NewsReaderService : Service() {
             // Use smart monitor instead of hard lock
             startWakeLockMonitor()
             
-            // Capture navigation state at start (before coroutine)
-            val wasNavigating = isNavigatingInSingleMode
-            DebugLogger.log(TAG, ">>> startReadingSingle: news=${news.title}, wasNavigating=$wasNavigating")
+            DebugLogger.log(TAG, ">>> startReadingSingle: news=${news.title}, isNavigating=$isNavigatingInSingleMode")
             
             // Store current title for resume
             currentTitle = news.translatedTitle ?: news.title
@@ -512,10 +510,8 @@ class NewsReaderService : Service() {
                             if (readFull) {
                                 content
                             } else {
-                                when (val result = geminiClient.summarizeForTts(content, news.link)) {
-                                    is SummarizeResult.Success -> result.text
-                                    else -> news.description.take(200)
-                                }
+                                val result = geminiClient.summarizeForTts(content, news.link)
+                                result.getTextOrFallback()
                             }
                         } catch (e: CancellationException) {
                             throw e
@@ -554,8 +550,8 @@ class NewsReaderService : Service() {
                         return@launch  // Exit early, don't continue to the finish logic
                     }
                     
-                    // FIX: Only auto-stop if this was NOT a navigation (initial read)
-                    if (wasNavigating) {
+                    // FIX: Read navigation flag now (not stale capture from before coroutine launch)
+                    if (isNavigatingInSingleMode) {
                         DebugLogger.log(TAG, ">>> Single read finished (was navigating) - keeping service alive for more navigation")
                         updateNotification("Đã đọc xong: ${news.translatedTitle ?: news.title}")
                         _serviceState.update { state ->
@@ -619,16 +615,15 @@ class NewsReaderService : Service() {
             updatePlaybackState(true)
 
             val ordinalWords = listOf("nhất", "hai", "ba", "bốn", "năm")
-            val itemsToRead = newsItems.take(5)
             
             try {
                 ttsManager.ensureSilentAudioRunning()
                 geminiClient.refreshApiKeys()
                 
-                for (index in fromIndex until itemsToRead.size) {
+                for (index in fromIndex until newsItems.size) {
                     if (!isActive) break
                     
-                    val news = itemsToRead[index]
+                    val news = newsItems[index]
                     currentNewsIndex = index // Update tracking variable
                     isItemCompleted = false // Reset completion flag
                     
@@ -661,10 +656,8 @@ class NewsReaderService : Service() {
                                 }
                             }
                             
-                            when (val result = geminiClient.summarizeForTts(content, news.link)) {
-                                is SummarizeResult.Success -> result.text
-                                else -> news.description.take(200)
-                            }
+                            val result = geminiClient.summarizeForTts(content, news.link)
+                            result.getTextOrFallback()
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
@@ -701,13 +694,14 @@ class NewsReaderService : Service() {
                     }
                     
                     // Pause between items
-                    if (index < itemsToRead.size - 1) {
+                    if (index < newsItems.size - 1) {
                         delay(1000)
                     }
                 }
                 
-                // Finished
-                val closingMsg = "Đã đọc xong ${itemsToRead.size} tin, mời anh chị chọn 5 tin khác để đọc ạ."
+                // Finished - report actual number of items read
+                val actualItemsRead = newsItems.size - fromIndex
+                val closingMsg = "Đã đọc xong $actualItemsRead tin, mời anh chị chọn 5 tin khác để đọc ạ."
                 ttsManager.speakAndWait(closingMsg)
                 
                 _serviceState.update { state ->
@@ -845,7 +839,7 @@ class NewsReaderService : Service() {
         
         // Re-acquire WakeLock
         releaseWakeLockSafely()
-        wakeLock?.acquire(30 * 60 * 1000L)
+        startWakeLockMonitor()
         
         // IF sentences are empty, it means we imply "Restart Item" (interrupted during title/loading)
         if (state.sentences.isEmpty()) {
@@ -859,37 +853,27 @@ class NewsReaderService : Service() {
             }
             
             if (isReadAllMode) {
-                // In Read All, we ideally need the full list. If missing, we can't fully restore Read All context easily
-                // without re-detching. For now, try to restart current item.
                 val news = newsItems.getOrNull(currentNewsIndex) ?: state.newsItem
-                 if (news != null) {
+                if (news != null) {
                     if (newsItems.isEmpty()) {
-                         // Reconstruct list with dummy items to maintain index alignment for UI
-                         val paddingList = ArrayList<NewsItem>()
-                         for (i in 0 until state.newsIndex) {
-                             paddingList.add(NewsItem(id = "dummy_$i", title = "Tin đã qua", description = "", content = "", link = "", pubDate = ""))
-                         }
-                         paddingList.add(news)
-                         newsItems = paddingList
-                         currentNewsIndex = state.newsIndex
+                        // FIX #7: Use single-item list instead of dummy padding.
+                        // Dummy items had empty link/content causing fetch failures on navigation.
+                        newsItems = listOf(news)
+                        currentNewsIndex = 0
                     }
                     startReadingAllFromIndex(currentNewsIndex)
                 } else {
-                     DebugLogger.log(TAG, ">>> Error: Cannot restart Read All, news item missing")
-                     stopSelf()
+                    DebugLogger.log(TAG, ">>> Error: Cannot restart Read All, news item missing")
+                    stopSelf()
                 }
             } else {
                 val news = newsItems.getOrNull(currentNewsIndex) ?: state.newsItem
                 if (news != null) {
                     if (newsItems.isEmpty()) {
-                         // Reconstruct list with dummy items to maintain index alignment for UI
-                         val paddingList = ArrayList<NewsItem>()
-                         for (i in 0 until state.newsIndex) {
-                             paddingList.add(NewsItem(id = "dummy_$i", title = "Tin đã qua", description = "", content = "", link = "", pubDate = ""))
-                         }
-                         paddingList.add(news)
-                         newsItems = paddingList
-                         currentNewsIndex = state.newsIndex
+                        // FIX #7: Use single-item list instead of dummy padding.
+                        // Dummy items had empty link/content causing fetch failures on navigation.
+                        newsItems = listOf(news)
+                        currentNewsIndex = 0
                     }
                     startReadingSingle(news, readFullContent)
                 } else {
@@ -1050,81 +1034,70 @@ class NewsReaderService : Service() {
         }
         lastSkipTime = now  // Update immediately to prevent rapid calls
         
-        // FIX: Launch in coroutine with Mutex - no more isSkipping flag!
+        // FIX: Launch in coroutine with Mutex - queues skip if another is in progress
         serviceScope.launch {
-            // FIX: Use tryLock() - if mutex is already held, another skip is in progress
-            val acquired = skipMutex.tryLock()
-            if (!acquired) {
-                Log.d(TAG, "skipToNext: Mutex already locked, ignoring")
-                DebugLogger.log(TAG, ">>> NEXT: BLOCKED - mutex locked (another skip in progress)")
-                return@launch
-            }
-            
-            DebugLogger.log(TAG, ">>> NEXT: Mutex acquired")
-            
-            try {
-                val currentItem = newsItems.getOrNull(currentNewsIndex)
-                val currentTitle = currentItem?.title ?: "(none)"
-                Log.d(TAG, "skipToNext: currentIndex=$currentNewsIndex, total=${newsItems.size}, isReadAllMode=$isReadAllMode")
-                DebugLogger.log(TAG, ">>> NEXT: Đang đọc tin [$currentNewsIndex]: $currentTitle")
+            skipMutex.withLock {
+                DebugLogger.log(TAG, ">>> NEXT: Mutex acquired")
                 
-                // Check if we're at the last item
-                if (currentNewsIndex >= newsItems.size - 1) {
-                    Log.d(TAG, "Already at last item, ignoring Next")
-                    DebugLogger.log(TAG, ">>> NEXT: Đã ở tin cuối cùng, không thể Next")
-                    // DON'T return here - let finally run!
-                } else {
-                    // Cancel current reading
-                    readAllJob?.cancel()
-                    ttsManager.stop()
+                try {
+                    val currentItem = newsItems.getOrNull(currentNewsIndex)
+                    val currentTitle = currentItem?.title ?: "(none)"
+                    Log.d(TAG, "skipToNext: currentIndex=$currentNewsIndex, total=${newsItems.size}, isReadAllMode=$isReadAllMode")
+                    DebugLogger.log(TAG, ">>> NEXT: Đang đọc tin [$currentNewsIndex]: $currentTitle")
                     
-                    // Move to next
-                    currentNewsIndex++
-                    
-                    // FIX: Capture values inside lock to prevent race
-                    val targetIndex = currentNewsIndex
-                    val targetItem = newsItems.getOrNull(targetIndex)
-                    val isReadAll = isReadAllMode
-                    val readFull = readFullContent
-                    
-                    if (targetItem != null) {
-                        DebugLogger.log(TAG, ">>> NEXT: Chuyển sang tin [$targetIndex]: ${targetItem.title}")
-                        
-                        // FIX: Mark the target news as read - FIRE AND FORGET (don't block skip!)
-                        // Using launch instead of withContext to prevent mutex deadlock
-                        serviceScope.launch(Dispatchers.IO) {
-                            try {
-                                localSyncRepo?.markAsRead(targetItem.id) 
-                                    ?: readNewsDao.markAsRead(ReadNewsItem(newsId = targetItem.id))
-                            } catch (e: Exception) {
-                                Log.w(TAG, "Failed to mark news as read: ${e.message}")
-                            }
-                        }
-                        
-                        if (isReadAll) {
-                            // Continue reading from this index until end
-                            startReadingAllFromIndex(targetIndex)
-                        } else {
-                            // FIX: Mark that user is navigating so service won't auto-stop
-                            isNavigatingInSingleMode = true
-                            DebugLogger.log(TAG, ">>> NEXT: Calling startReadingSingle for item $targetIndex")
-                            startReadingSingle(targetItem, readFull)
-                            DebugLogger.log(TAG, ">>> NEXT: startReadingSingle returned (coroutine launched)")
-                        }
+                    // Check if we're at the last item
+                    if (currentNewsIndex >= newsItems.size - 1) {
+                        Log.d(TAG, "Already at last item, ignoring Next")
+                        DebugLogger.log(TAG, ">>> NEXT: Đã ở tin cuối cùng, không thể Next")
                     } else {
-                        Log.e(TAG, "skipToNext: Invalid index $targetIndex")
-                        DebugLogger.log(TAG, ">>> NEXT: Lỗi - không tìm thấy tin ở index $targetIndex")
+                        // Cancel current reading
+                        readAllJob?.cancel()
+                        ttsManager.stop()
+                        
+                        // Move to next
+                        currentNewsIndex++
+                        
+                        // Capture values inside lock to prevent race
+                        val targetIndex = currentNewsIndex
+                        val targetItem = newsItems.getOrNull(targetIndex)
+                        val isReadAll = isReadAllMode
+                        val readFull = readFullContent
+                        
+                        if (targetItem != null) {
+                            DebugLogger.log(TAG, ">>> NEXT: Chuyển sang tin [$targetIndex]: ${targetItem.title}")
+                            
+                            // Mark the target news as read - FIRE AND FORGET (don't block skip!)
+                            serviceScope.launch(Dispatchers.IO) {
+                                try {
+                                    localSyncRepo?.markAsRead(targetItem.id) 
+                                        ?: readNewsDao.markAsRead(ReadNewsItem(newsId = targetItem.id))
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Failed to mark news as read: ${e.message}")
+                                }
+                            }
+                            
+                            if (isReadAll) {
+                                // Continue reading from this index until end
+                                startReadingAllFromIndex(targetIndex)
+                            } else {
+                                // Mark that user is navigating so service won't auto-stop
+                                isNavigatingInSingleMode = true
+                                DebugLogger.log(TAG, ">>> NEXT: Calling startReadingSingle for item $targetIndex")
+                                startReadingSingle(targetItem, readFull)
+                                DebugLogger.log(TAG, ">>> NEXT: startReadingSingle returned (coroutine launched)")
+                            }
+                        } else {
+                            Log.e(TAG, "skipToNext: Invalid index $targetIndex")
+                            DebugLogger.log(TAG, ">>> NEXT: Lỗi - không tìm thấy tin ở index $targetIndex")
+                        }
                     }
+                } catch (e: CancellationException) {
+                    DebugLogger.log(TAG, ">>> NEXT: Cancelled")
+                    throw e  // Re-throw to allow proper cancellation
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in skipToNext", e)
+                    DebugLogger.log(TAG, ">>> NEXT: Error - ${e.message}")
                 }
-            } catch (e: CancellationException) {
-                DebugLogger.log(TAG, ">>> NEXT: Cancelled")
-                throw e  // Re-throw to allow proper cancellation
-            } catch (e: Exception) {
-                Log.e(TAG, "Error in skipToNext", e)
-                DebugLogger.log(TAG, ">>> NEXT: Error - ${e.message}")
-            } finally {
-                DebugLogger.log(TAG, ">>> NEXT: Mutex released")
-                skipMutex.unlock()  // Always release the mutex
             }
         }
     }
@@ -1148,81 +1121,70 @@ class NewsReaderService : Service() {
         }
         lastSkipTime = now  // Update immediately to prevent rapid calls
         
-        // FIX: Launch in coroutine with Mutex - no more isSkipping flag!
+        // FIX: Launch in coroutine with Mutex - queues skip if another is in progress
         serviceScope.launch {
-            // FIX: Use tryLock() - if mutex is already held, another skip is in progress
-            val acquired = skipMutex.tryLock()
-            if (!acquired) {
-                Log.d(TAG, "skipToPrevious: Mutex already locked, ignoring")
-                DebugLogger.log(TAG, ">>> PREV: BLOCKED - mutex locked (another skip in progress)")
-                return@launch
-            }
-            
-            DebugLogger.log(TAG, ">>> PREV: Mutex acquired")
-            
-            try {
-                val currentItem = newsItems.getOrNull(currentNewsIndex)
-                val currentTitle = currentItem?.title ?: "(none)"
-                Log.d(TAG, "skipToPrevious: currentIndex=$currentNewsIndex, isReadAllMode=$isReadAllMode")
-                DebugLogger.log(TAG, ">>> PREV: Đang đọc tin [$currentNewsIndex]: $currentTitle")
+            skipMutex.withLock {
+                DebugLogger.log(TAG, ">>> PREV: Mutex acquired")
                 
-                // Check if we're at the first item
-                if (currentNewsIndex <= 0) {
-                    Log.d(TAG, "Already at first item, ignoring Previous")
-                    DebugLogger.log(TAG, ">>> PREV: Đã ở tin đầu tiên, không thể Previous")
-                    // DON'T return here - let finally run!
-                } else {
-                    // Cancel current reading
-                    readAllJob?.cancel()
-                    ttsManager.stop()
+                try {
+                    val currentItem = newsItems.getOrNull(currentNewsIndex)
+                    val currentTitle = currentItem?.title ?: "(none)"
+                    Log.d(TAG, "skipToPrevious: currentIndex=$currentNewsIndex, isReadAllMode=$isReadAllMode")
+                    DebugLogger.log(TAG, ">>> PREV: Đang đọc tin [$currentNewsIndex]: $currentTitle")
                     
-                    // Move to previous
-                    currentNewsIndex--
-                    
-                    // FIX: Capture values inside lock to prevent race
-                    val targetIndex = currentNewsIndex
-                    val targetItem = newsItems.getOrNull(targetIndex)
-                    val isReadAll = isReadAllMode
-                    val readFull = readFullContent
-                    
-                    if (targetItem != null) {
-                        DebugLogger.log(TAG, ">>> PREV: Chuyển sang tin [$targetIndex]: ${targetItem.title}")
-                        
-                        // FIX: Mark the target news as read - FIRE AND FORGET (don't block skip!)
-                        // Using launch instead of withContext to prevent mutex deadlock
-                        serviceScope.launch(Dispatchers.IO) {
-                            try {
-                                localSyncRepo?.markAsRead(targetItem.id) 
-                                    ?: readNewsDao.markAsRead(ReadNewsItem(newsId = targetItem.id))
-                            } catch (e: Exception) {
-                                Log.w(TAG, "Failed to mark news as read: ${e.message}")
-                            }
-                        }
-                        
-                        if (isReadAll) {
-                            // Continue reading from this index until end
-                            startReadingAllFromIndex(targetIndex)
-                        } else {
-                            // FIX: Mark that user is navigating so service won't auto-stop
-                            isNavigatingInSingleMode = true
-                            DebugLogger.log(TAG, ">>> PREV: Calling startReadingSingle for item $targetIndex")
-                            startReadingSingle(targetItem, readFull)
-                            DebugLogger.log(TAG, ">>> PREV: startReadingSingle returned (coroutine launched)")
-                        }
+                    // Check if we're at the first item
+                    if (currentNewsIndex <= 0) {
+                        Log.d(TAG, "Already at first item, ignoring Previous")
+                        DebugLogger.log(TAG, ">>> PREV: Đã ở tin đầu tiên, không thể Previous")
                     } else {
-                        Log.e(TAG, "skipToPrevious: Invalid index $targetIndex")
-                        DebugLogger.log(TAG, ">>> PREV: Lỗi - không tìm thấy tin ở index $targetIndex")
+                        // Cancel current reading
+                        readAllJob?.cancel()
+                        ttsManager.stop()
+                        
+                        // Move to previous
+                        currentNewsIndex--
+                        
+                        // Capture values inside lock to prevent race
+                        val targetIndex = currentNewsIndex
+                        val targetItem = newsItems.getOrNull(targetIndex)
+                        val isReadAll = isReadAllMode
+                        val readFull = readFullContent
+                        
+                        if (targetItem != null) {
+                            DebugLogger.log(TAG, ">>> PREV: Chuyển sang tin [$targetIndex]: ${targetItem.title}")
+                            
+                            // Mark the target news as read - FIRE AND FORGET (don't block skip!)
+                            serviceScope.launch(Dispatchers.IO) {
+                                try {
+                                    localSyncRepo?.markAsRead(targetItem.id) 
+                                        ?: readNewsDao.markAsRead(ReadNewsItem(newsId = targetItem.id))
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Failed to mark news as read: ${e.message}")
+                                }
+                            }
+                            
+                            if (isReadAll) {
+                                // Continue reading from this index until end
+                                startReadingAllFromIndex(targetIndex)
+                            } else {
+                                // Mark that user is navigating so service won't auto-stop
+                                isNavigatingInSingleMode = true
+                                DebugLogger.log(TAG, ">>> PREV: Calling startReadingSingle for item $targetIndex")
+                                startReadingSingle(targetItem, readFull)
+                                DebugLogger.log(TAG, ">>> PREV: startReadingSingle returned (coroutine launched)")
+                            }
+                        } else {
+                            Log.e(TAG, "skipToPrevious: Invalid index $targetIndex")
+                            DebugLogger.log(TAG, ">>> PREV: Lỗi - không tìm thấy tin ở index $targetIndex")
+                        }
                     }
+                } catch (e: CancellationException) {
+                    DebugLogger.log(TAG, ">>> PREV: Cancelled")
+                    throw e  // Re-throw to allow proper cancellation
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in skipToPrevious", e)
+                    DebugLogger.log(TAG, ">>> PREV: Error - ${e.message}")
                 }
-            } catch (e: CancellationException) {
-                DebugLogger.log(TAG, ">>> PREV: Cancelled")
-                throw e  // Re-throw to allow proper cancellation
-            } catch (e: Exception) {
-                Log.e(TAG, "Error in skipToPrevious", e)
-                DebugLogger.log(TAG, ">>> PREV: Error - ${e.message}")
-            } finally {
-                DebugLogger.log(TAG, ">>> PREV: Mutex released")
-                skipMutex.unlock()  // Always release the mutex
             }
         }
     }

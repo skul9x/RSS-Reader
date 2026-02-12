@@ -27,6 +27,7 @@ import com.skul9x.rssreader.auth.AuthViewModel
 import com.skul9x.rssreader.data.local.ApiKeyManager
 import com.skul9x.rssreader.data.local.AppPreferences
 import com.skul9x.rssreader.ui.main.MainViewModel
+import com.skul9x.rssreader.utils.AppConfig
 
 /**
  * Main Settings screen with navigation to RSS Feeds, API Keys management, and Screen Mode settings.
@@ -145,8 +146,10 @@ fun SettingsScreen(
             // Battery Optimization section
             BatteryOptimizationSection(context = context)
 
-            // Debug Log section (Media Buttons)
-            DebugLogSection()
+            // Debug Log section (Media Buttons) - hidden by default
+            if (AppConfig.SHOW_DEBUG_LOG) {
+                DebugLogSection()
+            }
 
             // Activity Logs section
             SettingsItem(

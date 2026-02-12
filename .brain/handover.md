@@ -1,38 +1,38 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📋 HANDOVER DOCUMENT - 2026-02-11
+📋 HANDOVER DOCUMENT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📍 Đang làm: Firebase Cloud-Device Sync
-🔢 Đến bước: Hoàn thành fix 4 lỗi Medium (M1, M2, M3, M4)
+📍 Đang làm: Firebase Sync Subsystem Fixes
+🔢 Đến bước: Hoàn thành Audit & Fix Bugs (High/Medium)
 
 ✅ ĐÃ XONG:
-   - Fix **Conflict Resolution**: Đã chuyển sang "Earliest Wins" ✓
-   - Fix **Firestore Batch Limit**: Đã thêm chunking 400 items ✓
-   - Fix **M1 (Ordering)**: `markAsSynced` chạy ngay sau upload ✓
-   - Fix **M2 (Atomic)**: Merge + Timestamp update trong try-catch ✓
-   - Fix **M3 (Race)**: BatchQueueManager drain inside mutex ✓
-   - Fix **M4 (Guard)**: DAO warnings + documentation ✓
-   - Unit Tests: `SyncCoordinatorTest.kt` pass 7/7 cases ✓
+   - [BUG 3] Fixed Polling Loop (High)
+   - [BUG 4] Unique Work for Immediate Sync (High)
+   - [BUG 8] Sign-out State Cleanup (High)
+   - [BUG 2] Batch DB Writes (Medium)
+   - [BUG 5] applicationScope for Background Flush (Medium)
+   - [BUG 6] Timestamp Precision (>= 1ms buffer) (Medium)
+   - [BUG 10] Recovery Logic Simplification (Medium)
+   - All fixes verified with `SyncCoordinatorTest`.
 
-⏳ CÒN LẠI (Low Priority):
-   - **L1**: `SyncScheduler.triggerImmediateSync` cần dùng unique work name.
-   - **L2**: Lưu trạng thái `BatchQueueManager` vào DB bền vững hơn (handle process bị kill).
-   - **L3**: `downloadSince` dùng `>=` thay vì `>` để tránh lệch boundary 1ms.
-   - **Cleanup**: Dọn các warnings deprecated trong `GeminiApiClient`.
+⏳ CÒN LẠI:
+   - [BUG 1] Remove redundant PENDING check in SQL (Low)
+   - [UI] Thêm Sync Indicator (xoay xoay) khi app đang đẩy data (Feature)
 
 🔧 QUYẾT ĐỊNH QUAN TRỌNG:
-   - Ưu tiên ghi trạng thái "Đã Sync" ngay sau khi upload thành công để tránh lãng phí bandwidth nếu bước sau fail.
-   - Không update `lastDownloadTimestamp` nếu quá trình merge cục bộ bị lỗi (để lần sau sync lại từ mốc đó).
-   - Dùng snapshot queue bên trong Mutex để đảm bảo tính nguyên tử (Atomicity) cho batch processing.
+   - Ưu tiên "Earliest Wins" cho Read Status (Conflict Resolution).
+   - Chunking Firestore upload/delete ở mức 400 items.
+   - Hashing API keys (SHA-256) trước khi lưu.
 
 ⚠️ LƯU Ý CHO SESSION SAU:
-   - Các file sync hiện tại đã ổn định về logic nghiệp vụ chính.
-   - Nếu muốn tối ưu thêm, tập trung vào `SyncScheduler.kt` (L1) và boundary query trong `FirestoreSyncRepository.kt` (L3).
+   - Mọi logic đồng bộ giờ đây tập trung tại `SyncCoordinator`.
+   - `SyncWorker` chỉ gọi `performFullSync()` (WorkManager lo retry).
+   - Đăng xuất sẽ reset toàn bộ Singletons via `RssApplication.onUserSignOut`.
 
 📁 FILES QUAN TRỌNG:
-   - .brain/brain.json (KI & Patterns)
-   - .brain/session.json (Progress)
-   - CHANGELOG.md (History)
+   - `SyncCoordinator.kt`: Trái tim của hệ thống sync.
+   - `ReadNewsDao.kt`: Chứa Batch Upsert logic.
+   - `.brain/session.json`: Progress hiện tại.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📍 Đã lưu! Để tiếp tục: Gõ /recap

@@ -47,6 +47,10 @@ class BatchQueueManager private constructor(
                 }
             }
         }
+
+        fun resetInstance() {
+            INSTANCE = null
+        }
     }
 
     /**
@@ -127,7 +131,7 @@ class BatchQueueManager private constructor(
         if (pendingCount > 0) {
             Log.d(TAG, "Recovering $pendingCount pending items")
             try {
-                syncCoordinator.performFullSyncWithRetry()
+                syncCoordinator.performFullSync()
                 Log.d(TAG, "Recovery sync completed")
             } catch (e: Exception) {
                 Log.e(TAG, "Recovery sync failed", e)
@@ -140,4 +144,9 @@ class BatchQueueManager private constructor(
      * Gets the current queue size (for debugging/UI).
      */
     suspend fun getQueueSize(): Int = mutex.withLock { queue.size }
+
+    /**
+     * Clears the in-memory queue.
+     */
+    suspend fun clearQueue() = mutex.withLock { queue.clear() }
 }

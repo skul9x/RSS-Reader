@@ -204,7 +204,12 @@ class SharedLinkViewModel(application: Application) : AndroidViewModel(applicati
             putExtra(NewsReaderService.EXTRA_NEWS_ITEM, newsItem)
             putExtra(NewsReaderService.EXTRA_READ_FULL, false)
         }
-        context.startService(intent)
+        
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            context.startForegroundService(intent)
+        } else {
+            context.startService(intent)
+        }
     }
     
     /**
@@ -234,7 +239,12 @@ class SharedLinkViewModel(application: Application) : AndroidViewModel(applicati
             putExtra(NewsReaderService.EXTRA_NEWS_ITEM, newsItem)
             putExtra(NewsReaderService.EXTRA_READ_FULL, true)
         }
-        context.startService(intent)
+        
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            context.startForegroundService(intent)
+        } else {
+            context.startService(intent)
+        }
     }
     
     /**
@@ -245,7 +255,12 @@ class SharedLinkViewModel(application: Application) : AndroidViewModel(applicati
         val intent = Intent(context, NewsReaderService::class.java).apply {
             action = NewsReaderService.ACTION_STOP
         }
-        context.startService(intent)
+        
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            context.startForegroundService(intent)
+        } else {
+            context.startService(intent)
+        }
     }
     
     /**

@@ -1,6 +1,7 @@
 package com.skul9x.rssreader
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.skul9x.rssreader.data.local.AppDatabase
 import com.skul9x.rssreader.data.local.SyncPreferences
@@ -40,6 +41,33 @@ class RssApplication : Application() {
         fun getBatchQueueManager(): BatchQueueManager? = _batchQueueManager
 
         fun getFirebaseLogRepository(): com.skul9x.rssreader.data.repository.FirebaseLogRepository? = _firebaseLogRepository
+
+        /**
+         * Clears all sync-related state when a user signs out.
+         * Ensures the next user starts with a clean slate.
+         */
+        suspend fun onUserSignOut(context: Context) {
+            // 1. Cancel scheduled sync work
+            SyncScheduler(context).cancelAllSyncWork()
+            
+            // 2. Clear in-memory queue
+            _batchQueueManager?.clearQueue()
+            
+            // 3. Clear local DB read history
+            AppDatabase.getDatabase(context).readNewsDao().clearAll()
+            
+            // 4. Reset sync preferences (timestamps, etc.)
+            SyncPreferences.getInstance(context).clearSyncData()
+            
+            // 5. Reset singleton instances to force re-initialization on next use
+            SyncCoordinator.resetInstance()
+            FirestoreSyncRepository.resetInstance()
+            BatchQueueManager.resetInstance()
+            LocalSyncRepository.resetInstance()
+            
+            _localSyncRepository = null
+            _batchQueueManager = null
+        }
     }
 
     override fun onCreate() {
@@ -98,7 +126,7 @@ class RssApplication : Application() {
         
         // 6. Add lifecycle observer to flush queue when app goes to background
         ProcessLifecycleOwner.get().lifecycle.addObserver(
-            AppLifecycleObserver(batchQueueManager)
+            AppLifecycleObserver(batchQueueManager, applicationScope)
         )
     }
     

@@ -2,18 +2,34 @@
 
 ## [Unreleased] - 2026-02-11
 
+### Audited
+- **Firebase Sync Flow:**
+  - Performed comprehensive audit of Sync logic. Verified 10 reported logic errors.
+  - Confirmed 8 bugs, including two **High Severity** issues:
+    - **BUG 3:** Indefinite 5-minute polling loop caused by overlapping periodic and one-time tasks.
+    - **BUG 4:** Potential race conditions in `triggerImmediateSync` due to non-unique work enqueuing.
+  - Identified **Medium Severity** architectural limitation in timestamp-based sync (BUG 6) and singleton persistence across sessions (BUG 8).
+  - Verified 1 low-priority cosmetic issue (Unused import).
+  - Documentation of audit results saved to `.brain/audit_verification.md`.
+
 ### Fixed
-- **Firebase Sync Cloud-Devices:**
-  - **Atomic Sync Ordering (M1):** Reordered `markAsSynced` to execute immediately after successful upload, ensuring local and remote states are consistent even if later download steps fail.
-  - **Protected Sync Flow (M2):** Wrapped merge and download-timestamp updates in an atomic try-catch block to prevent skipping items if local merging fails.
-  - **Thread-Safe Batch Queue (M3):** Redesigned `BatchQueueManager` to drain the in-memory queue atomically under lock, resolving race conditions between adding and flushing items.
-  - **Anti-Misuse Guards (M4):** Added `@Deprecated` warnings and enhanced documentation to `ReadNewsDao` methods to enforce usage of centralized conflict resolution logic in `SyncCoordinator`.
-  - **Extended Test Suite:** Added unit tests verifying sync operation ordering and failure recovery.
-  - Resolved **Conflict Resolution Mâu Thuẫn**: Inverted logic in `SyncCoordinator.mergeWithLocal()` to prioritize "Earliest Wins" (original read time) instead of "Newest Wins", ensuring data consistency across devices.
-  - Resolved **Firestore Batch Limit Crash**: Implemented chunking (400 items per batch) in `FirestoreSyncRepository.uploadBatch()` to stay safely under Firestore's 500-operation limit.
-  - Fixed **Silent Download Failures**: Modified `FirestoreSyncRepository.downloadSince()` to rethrow exceptions instead of returning an empty list on failure, allowing `SyncCoordinator` to trigger retry logic.
-  - Added **Authentication Guard**: Implemented `isUserSignedIn()` check in `SyncCoordinator` to skip sync operations when the user is not logged in, preventing unnecessary `IllegalStateException` crashes.
-  - Validated all fixes with new unit tests in `SyncCoordinatorTest`.
+- **Firebase Sync Subsystem (High & Medium Severity):**
+  - **BUG 3: Fixed Polling Loop (High)**: Removed redundant `scheduleNextSync()` self-chaining in `SyncWorker`, relying solely on the 15-minute periodic schedule.
+  - **BUG 4: Unique Work Enforcement (High)**: Modified `triggerImmediateSync` to use `enqueueUniqueWork` with `REPLACE` policy, preventing concurrent sync workers and data races.
+  - **BUG 8: Global Sign-out Cleanup (High)**: Implemented `onUserSignOut` orchestration to clear local DB, reset sync timestamps, cancel background tasks, and nullify singleton instances (`SyncCoordinator`, `LocalSyncRepository`, etc.) when a user logs out.
+  - **BUG 2: Batch DB Writes (Medium)**: Added `@Transaction` batch upsert method to `ReadNewsDao`, reducing first-sync I/O from N transactions to 1.
+  - **BUG 5: Reliable Background Flush (Medium)**: Upgraded `AppLifecycleObserver` to use `applicationScope` instead of an ephemeral coroutine scope, ensuring data is uploaded even if the process is killed shortly after going to background.
+  - **BUG 6: Cursor Precision Edge-case (Medium)**: Switched from `>` to `>=` in Firestore query with 1ms buffer to prevent skipping items updated in the same millisecond.
+  - **BUG 10: Recovery Safety (Medium)**: Removed misleading `performFullSyncWithRetry` no-op and switched to direct calls, delegating retry responsibility to WorkManager's exponential backoff.
+- **Summary Reading Flow:**
+  - **Corrected Rotation Logic (H1):** Fixed `suggestWithRetry` to use MODEL-FIRST rotation (consistent with summarization), preventing missed model/key combinations.
+  - **Thread-Safe API Key Access (H2):** Secured `apiKeys` access in translation functions with `stateMutex.withLock` to prevent concurrent modification race conditions.
+  - **Sentence-Level Resume tracking (H3):** Switched "Read All" mode to use sentence-based TTS tracking, enabling mid-article resume support after interruptions.
+  - **Robust JSON Extraction (M1):** Replaced brittle string manipulation with Regex-based extraction and markdown code block stripping for reliable batch translation parsing.
+  - **Enhanced API Key Security (M3):** Implemented SHA-256 hashing for API keys in `ModelQuotaManager` to prevent plaintext key storage in device settings.
+  - **Battery-Smart WakeLock (M4):** Replaced hard 30-minute WakeLock with a dynamic monitor that releases automatically when reading completes.
+  - **Android 8+ Compat (M5):** Fixed "Reading from shared link" crashes by using `startForegroundService` for background service initialization.
+  - Verified with a successful Gradle build (`assembleDebug`).
 
 ## [Unreleased] - 2026-02-10
 

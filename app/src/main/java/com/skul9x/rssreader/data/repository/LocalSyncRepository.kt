@@ -93,15 +93,8 @@ class LocalSyncRepository(
      * Insert multiple items from remote sync.
      */
     suspend fun insertFromRemote(items: List<ReadNewsItem>) {
-        // Insert each item only if not overwriting a PENDING local item
-        items.forEach { item ->
-            dao.upsertFromRemoteIfNotPending(
-                newsId = item.newsId,
-                readAt = item.readAt,
-                deviceType = item.deviceType,
-                syncStatus = SyncStatus.SYNCED
-            )
-        }
+        if (items.isEmpty()) return
+        dao.upsertFromRemoteBatch(items)
     }
 
     /**
@@ -209,6 +202,10 @@ class LocalSyncRepository(
                     INSTANCE = it 
                 }
             }
+        }
+
+        fun resetInstance() {
+            INSTANCE = null
         }
     }
 }

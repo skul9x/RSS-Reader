@@ -94,12 +94,28 @@ interface ReadNewsDao {
     suspend fun markAllAsSynced()
 
     /**
+     * Batch insert remote items, skipping any that would overwrite PENDING local items.
+     * Uses @Transaction to ensure atomicity and high performance (single SQL transaction).
+     */
+    @Transaction
+    suspend fun upsertFromRemoteBatch(items: List<ReadNewsItem>) {
+        items.forEach { item ->
+            upsertFromRemoteIfNotPending(
+                newsId = item.newsId,
+                readAt = item.readAt,
+                deviceType = item.deviceType,
+                syncStatus = item.syncStatus
+            )
+        }
+    }
+
+    /**
      * Insert/update a remote item only if it doesn't overwrite a PENDING item.
      * WARNING: This does NOT perform conflict resolution (earliest-wins).
      * Conflict resolution MUST be done by the caller (SyncCoordinator.mergeWithLocal).
      * Only items that SHOULD be written should be passed to this method.
      */
-    @Deprecated("Use SyncCoordinator.mergeWithLocal instead for proper conflict resolution")
+    @Deprecated("Use upsertFromRemoteBatch for better performance")
     @Query("""
         INSERT OR REPLACE INTO read_news (newsId, readAt, deviceType, syncStatus)
         SELECT :newsId, :readAt, :deviceType, :syncStatus

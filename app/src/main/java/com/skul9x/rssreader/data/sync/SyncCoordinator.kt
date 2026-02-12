@@ -4,7 +4,6 @@ import com.skul9x.rssreader.data.model.ReadNewsItem
 import com.skul9x.rssreader.data.model.SyncStatus
 import com.skul9x.rssreader.data.remote.FirestoreSyncRepository
 import com.skul9x.rssreader.data.repository.LocalSyncRepository
-import kotlinx.coroutines.delay
 
 import androidx.annotation.VisibleForTesting
 
@@ -34,6 +33,10 @@ class SyncCoordinator @VisibleForTesting internal constructor(
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: SyncCoordinator(localRepo, firestoreRepo, logRepo).also { INSTANCE = it }
             }
+        }
+
+        fun resetInstance() {
+            INSTANCE = null
         }
     }
 
@@ -109,14 +112,6 @@ class SyncCoordinator @VisibleForTesting internal constructor(
         }
     }
 
-    /**
-     * Performs sync with retry logic for resilience.
-     */
-    suspend fun performFullSyncWithRetry(maxRetries: Int = 1) {
-        // NOTE: Internal retry removed to let WorkManager handle retries reliably.
-        // maxRetries param is kept for compatibility but ignored.
-        performFullSync()
-    }
 
     /**
      * Merges remote items into local database with conflict resolution.

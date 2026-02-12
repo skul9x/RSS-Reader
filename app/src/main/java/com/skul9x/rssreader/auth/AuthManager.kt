@@ -15,6 +15,9 @@ import com.skul9x.rssreader.R
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 /**
@@ -82,6 +85,16 @@ class AuthManager private constructor(private val context: Context) {
         firebaseAuth.signOut()
         googleSignInClient.signOut()
         Log.d(TAG, "User signed out")
+        
+        // Cleanup sync state asynchronously to reset singletons and clear local data
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                com.skul9x.rssreader.RssApplication.onUserSignOut(context)
+                Log.d(TAG, "Sync state cleared after sign-out")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to clear sync state after sign-out", e)
+            }
+        }
     }
     
     fun getCurrentUser(): FirebaseUser? = firebaseAuth.currentUser

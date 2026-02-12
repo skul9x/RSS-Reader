@@ -70,7 +70,16 @@ class ModelQuotaManager(context: Context) {
     }
 
     private fun makeKey(model: String, apiKey: String): String {
-        return "$model::$apiKey"
+        return try {
+            val hash = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(apiKey.toByteArray())
+                .take(8)
+                .joinToString("") { "%02x".format(it) }
+            "$model::$hash"
+        } catch (e: Exception) {
+            // Fallback for extreme cases (should not happen)
+            "$model::${apiKey.hashCode()}"
+        }
     }
 
     /**
