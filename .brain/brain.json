@@ -81,10 +81,23 @@
             "name": "Sentence-level TTS Resume",
             "status": "Fixed",
             "details": "Splits text into sentences to allow precise resuming mid-article after interruptions (calls, focus loss)."
+        },
+        {
+            "name": "Continuous Reading Mode",
+            "status": "Completed",
+            "details": "30-minute automated loop with news refreshing, batch translation, and visual differentiation (Amber/Orange neon colors)."
         }
     ],
     "knowledge_items": {
         "patterns": [
+            {
+                "name": "Reactive Long-Press Gestures",
+                "description": "Use pointerInput + detectTapGestures in Compose to implement long-press actions with specific durations (e.g., 400ms) and visual/haptic feedback."
+            },
+            {
+                "name": "Service-to-UI Synchronization",
+                "description": "For background services that modify core data (e.g., refreshing news items in a loop), pipe the new data through a StateFlow in the ServiceState bound to the UI to ensure consistency."
+            },
             {
                 "name": "Quota Management",
                 "description": "Use ModelQuotaManager to track availability of resources (API keys/Models) to prevent wasted calls."

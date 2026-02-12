@@ -22,6 +22,8 @@ import kotlin.math.sin
 // --- Colors ---
 val NeonCyan = Color(0xFF00FFFF)
 val NeonPurple = Color(0xFF9D00FF)
+val NeonAmber = Color(0xFFFFAB00)
+val NeonOrange = Color(0xFFFF6D00)
 
 val GlassBackground = Color(0xFF202020).copy(alpha = 0.7f) // Dark Gray for better contrast
 val GlassBorder = Color(0xFFFFFFFF).copy(alpha = 0.3f) // More visible border
@@ -29,6 +31,11 @@ val GlassBorder = Color(0xFFFFFFFF).copy(alpha = 0.3f) // More visible border
 // --- Brushes ---
 val NeonGradient = Brush.linearGradient(
     colors = listOf(NeonCyan, NeonPurple)
+)
+
+// Distinct gradient for Continuous Reading mode (amber/orange)
+val ContinuousNeonGradient = Brush.linearGradient(
+    colors = listOf(NeonAmber, NeonOrange)
 )
 
 val BottomPanelGradient = Brush.verticalGradient(

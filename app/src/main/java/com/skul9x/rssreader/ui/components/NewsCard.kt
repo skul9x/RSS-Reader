@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.skul9x.rssreader.data.model.NewsItem
+import com.skul9x.rssreader.ui.theme.ContinuousNeonGradient
 import com.skul9x.rssreader.ui.theme.GlassBackground
 import com.skul9x.rssreader.ui.theme.GlassBorder
 import com.skul9x.rssreader.ui.theme.NeonGradient
@@ -40,6 +41,7 @@ fun NewsCard(
     index: Int,
     isSelected: Boolean,
     isPlaying: Boolean,
+    isContinuousMode: Boolean = false,
     readingProgress: Float = 0f, // NEW: 0.0 to 1.0
     maxLines: Int = 3,
     useMarquee: Boolean = false,
@@ -72,7 +74,8 @@ fun NewsCard(
         // --- GLASS MODE LOGIC ---
         // Viền Neon Gradient khi select
         val borderModifier = if (isSelected) {
-            Modifier.border(width = 2.dp, brush = NeonGradient, shape = RoundedCornerShape(16.dp))
+            val gradient = if (isContinuousMode) ContinuousNeonGradient else NeonGradient
+            Modifier.border(width = 2.dp, brush = gradient, shape = RoundedCornerShape(16.dp))
         } else {
             Modifier.border(width = 1.dp, color = GlassBorder, shape = RoundedCornerShape(16.dp))
         }
@@ -82,7 +85,9 @@ fun NewsCard(
             .clickable(onClick = onClick)
     } else {
         // --- STANDARD MODE LOGIC (Old) ---
-        val baseBorderColor = if (isSelected) Color(0xFFFFD600) else Color.Transparent
+        val baseBorderColor = if (isSelected) {
+            if (isContinuousMode) Color(0xFFFF6D00) else Color(0xFFFFD600)
+        } else Color.Transparent
         val borderWidth = if (isSelected) 4.dp else 0.dp
         
         // Pulse effect on border

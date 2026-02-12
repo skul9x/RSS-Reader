@@ -71,6 +71,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     isSummarizing = serviceState.isReading,
                     readingNewsIndex = serviceState.currentIndex,
                     isReadAllMode = serviceState.isReadAllMode,
+                    isContinuousMode = serviceState.isContinuousMode,
+                    newsItems = serviceState.continuousNewsItems ?: _uiState.value.newsItems,
                     currentSummary = serviceState.currentSummary ?: _uiState.value.currentSummary,
                     // FIX: Ensure history is marked even if reading finishes naturally (not just on Stop)
                     hasReadHistory = (serviceState.currentSummary != null) || _uiState.value.hasReadHistory,
@@ -457,6 +459,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
+     * Start continuous reading mode.
+     * Reads 5 news, auto-refreshes, reads next 5, loops for 30 minutes.
+     * Triggered by long-pressing the "Đọc 5 tin" button.
+     */
+    fun startContinuousReading() {
+        val newsItems = _uiState.value.newsItems
+        if (newsItems.isEmpty()) return
+
+        summarizationJob?.cancel()
+        readAllJob?.cancel()
+        ttsManager.stop()
+
+        val context = getApplication<Application>()
+        val intent = android.content.Intent(context, com.skul9x.rssreader.service.NewsReaderService::class.java).apply {
+            action = com.skul9x.rssreader.service.NewsReaderService.ACTION_START_CONTINUOUS
+            putParcelableArrayListExtra(
+                com.skul9x.rssreader.service.NewsReaderService.EXTRA_NEWS_ITEMS,
+                ArrayList(newsItems.take(5))
+            )
+        }
+        
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            context.startForegroundService(intent)
+        } else {
+            context.startService(intent)
+        }
+        
+        _uiState.value = _uiState.value.copy(
+            isSummarizing = true,
+            error = null
+        )
+    }
+
+    /**
      * Clear error message.
      */
     fun clearError() {
@@ -488,6 +524,7 @@ data class MainUiState(
     val error: String? = null,
     val readingNewsIndex: Int = -1, // -1 means inactive. 0..4 means reading that specific item.
     val isReadAllMode: Boolean = false, // True when using "Read All 5" mode
+    val isContinuousMode: Boolean = false, // True when in continuous reading loop mode
     val hasReadHistory: Boolean = false,  // True after any reading completes/stops (for Replay button)
     val readingProgress: Float = 0f,  // NEW
     val hasResumableContent: Boolean = false,  // NEW: True when there's interrupted content to resume

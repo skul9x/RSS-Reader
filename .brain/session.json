@@ -1,30 +1,36 @@
 {
-    "updated_at": "2026-02-11T11:28:00+07:00",
+    "updated_at": "2026-02-12T20:15:00+07:00",
     "working_on": {
-        "feature": "Sync Flow Bug Fixes",
-        "task": "Fixed 3 High and 4 Medium priority bugs in Firebase sync system.",
-        "status": "All Critical/Medium Bugs Resolved",
+        "feature": "Continuous Reading Mode",
+        "task": "Implemented full continuous reading cycle with 30-min loop, refresh, translate, and UI sync.",
+        "status": "Feature Completed & Verified",
         "files": [
-            "app/src/main/java/com/skul9x/rssreader/data/sync/SyncCoordinator.kt",
-            "app/src/main/java/com/skul9x/rssreader/data/sync/SyncScheduler.kt",
-            "app/src/main/java/com/skul9x/rssreader/worker/SyncWorker.kt",
-            "app/src/main/java/com/skul9x/rssreader/data/repository/LocalSyncRepository.kt",
-            "app/src/main/java/com/skul9x/rssreader/data/local/ReadNewsDao.kt"
+            "app/src/main/java/com/skul9x/rssreader/service/NewsReaderService.kt",
+            "app/src/main/java/com/skul9x/rssreader/ui/main/MainViewModel.kt",
+            "app/src/main/java/com/skul9x/rssreader/ui/main/MainScreenPortrait.kt",
+            "app/src/main/java/com/skul9x/rssreader/ui/components/NewsCard.kt",
+            "app/src/main/java/com/skul9x/rssreader/ui/theme/ThemeExtensions.kt"
         ],
         "blockers": [],
-        "notes": "Verified with SyncCoordinatorTest and compileDebugKotlin."
+        "notes": "Verified logic for UI sync, duplicate prevention, and long-press interaction."
     },
     "pending_tasks": [
-        {
-            "task": "BUG 1: Remove redundant PENDING check in SQL",
-            "priority": "low"
-        },
         {
             "task": "UI: Add Sync Indicator to main screen",
             "priority": "low"
         }
     ],
     "recent_changes": [
+        {
+            "timestamp": "2026-02-12T20:10:00+07:00",
+            "type": "feature",
+            "description": "Implemented Continuous Reading Mode (30-min loop). Added automated refresh, translation, and UI synchronization. Fixed 3 critical logic bugs in the flow.",
+            "files": [
+                "app/src/main/java/com/skul9x/rssreader/service/NewsReaderService.kt",
+                "app/src/main/java/com/skul9x/rssreader/ui/main/MainScreenPortrait.kt",
+                "app/src/main/java/com/skul9x/rssreader/ui/main/MainViewModel.kt"
+            ]
+        },
         {
             "timestamp": "2026-02-12T18:30:00+07:00",
             "type": "fix",
@@ -36,55 +42,28 @@
                 "app/src/main/java/com/skul9x/rssreader/data/local/ReadNewsDao.kt",
                 "app/src/main/java/com/skul9x/rssreader/RssApplication.kt"
             ]
-        },
-        {
-            "timestamp": "2026-02-11T14:45:00+07:00",
-            "type": "audit",
-            "description": "Verified 10 bug claims in Sync flow. 8/10 confirmed. High risks: BUG 3 (Polling loop) and BUG 4 (Non-unique work).",
-            "files": [
-                ".brain/audit_verification.md"
-            ]
-        },
-        {
-            "timestamp": "2026-02-11T11:25:00+07:00",
-            "type": "fix",
-            "description": "Fixed 4 Medium bugs: M1 (Regex JSON), M3 (Key Hashing), M4 (Smart WakeLock), M5 (Android 8+ Service).",
-            "files": [
-                "app/src/main/java/com/skul9x/rssreader/data/network/GeminiApiClient.kt",
-                "app/src/main/java/com/skul9x/rssreader/data/network/ModelQuotaManager.kt",
-                "app/src/main/java/com/skul9x/rssreader/service/NewsReaderService.kt"
-            ]
-        },
-        {
-            "timestamp": "2026-02-11T11:15:00+07:00",
-            "type": "fix",
-            "description": "Fixed 3 High bugs: H1 (Rotation), H2 (Mutex Translate), H3 (Sentence Tracking).",
-            "files": [
-                "app/src/main/java/com/skul9x/rssreader/data/network/GeminiApiClient.kt",
-                "app/src/main/java/com/skul9x/rssreader/service/NewsReaderService.kt"
-            ]
         }
     ],
     "errors_encountered": [
         {
-            "error": "H1: Missed combinations in suggestWithRetry due to start index dependency",
-            "solution": "Rewrote to sequential nested for-loop (Model-First)",
+            "error": "UI/Service Desync: UI news list didn't update when Service refreshed items in continuous loop",
+            "solution": "Added continuousNewsItems to NewsReaderState and observed it in MainViewModel to update UI state",
             "resolved": true
         },
         {
-            "error": "M5: Service crash on Android 8+ when started from background",
-            "solution": "Added Build.VERSION check and used startForegroundService",
+            "error": "Immediate Duplicate Reading: News items repeated because they weren't marked as read between rounds",
+            "solution": "Added explicit readNewsDao.markAsRead() call after each item summarization in the batch loop",
             "resolved": true
         }
     ],
     "decisions_made": [
         {
-            "decision": "Use SHA-256 for API key lookup keys",
-            "reason": "Prevents leaking raw secrets in SharedPreferences while still allowing lookup."
+            "decision": "Use currentCoroutineContext().isActive for cancellation check in suspend functions",
+            "reason": "Plain suspend functions don't have access to CoroutineScope.isActive; this ensures clean interruption."
         },
         {
-            "decision": "Standardize on MODEL-FIRST rotation",
-            "reason": "Prioritizes response quality over everything else."
+            "decision": "400ms duration for long-press gesture",
+            "reason": "Standard Android long-press experience, supplemented with haptic and Toast feedback for clarity."
         }
     ],
     "skipped_tests": []

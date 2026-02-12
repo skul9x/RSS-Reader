@@ -41,3 +41,22 @@
 
 ## 3. Article Content Extraction
 *To be documented...*
+## 4. Continuous Reading Mode
+**Status:** ✅ Complete
+**Goal:** Provide a hands-free, automated news consumption experience (e.g., while driving).
+
+### Logic
+- **Trigger:** Long-press (400ms) on "Đọc 5 tin" button.
+- **Duration:** 30 minutes (auto-releasing WakeLock).
+- **Cycle:**
+  1. Read 5 items sequentially (Intro -> Summarize -> Speak).
+  2. Mark each item as `read` in DB.
+  3. Fetch 5 new random/fresh items via `refreshVozAndGetRandomNews`.
+  4. Batch-translate titles via Gemini.
+  5. Sync new list to UI.
+  6. Repeat until timeout or manual stop.
+
+### Visual Style
+- **Icon:** `PlaylistPlay` (Standard) -> `AllInclusive` (Continuous).
+- **Colors:** Primary/Cyan (Standard) -> Error/Amber (Continuous).
+- **Border:** Amber/Orange pulsing gradient to highlight active reading item.

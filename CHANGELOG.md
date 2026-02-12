@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased] - 2026-02-12
+
+### Added
+- **Continuous Reading Mode:**
+  - Implemented a 30-minute automated reading loop activated via long-press (400ms) on the "Đọc 5 tin" button.
+  - Features automated news refreshing (Voz + mix), batch translation of titles, and sequential summarization using Gemini API.
+  - Added a distinctive visual style (Amber/Orange borders and ∞ icon) to differentiate from standard reading mode.
+  - Integrated with `ReadNewsDao` to prevent duplicate news items within the continuous loop.
+  - Added Toast notifications and haptic feedback for user confirmation.
+
+### Fixed
+- **Logic Errors in Continuous Flow:**
+  - **UI/Service Sync:** Fixed issue where the news list on screen didn't update when the background service refreshed news items.
+  - **Duplicate Prevention:** Ensured items are marked as read immediately after reading to avoid re-appearing in subsequent refresh rounds.
+  - **UI Safety:** Added enabled/disabled visual states and gesture guards to the main control button to prevent interaction conflicts during active summarization.
+
 ## [Unreleased] - 2026-02-11
 
 ### Audited

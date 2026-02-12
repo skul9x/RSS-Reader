@@ -42,6 +42,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.currentCoroutineContext
 import com.skul9x.rssreader.data.model.ReadNewsItem
 import com.skul9x.rssreader.data.network.gemini.SummarizeResult
 
@@ -66,6 +67,7 @@ class NewsReaderService : Service() {
         const val ACTION_PREVIOUS = "com.skul9x.rssreader.PREVIOUS"
         const val ACTION_PLAY = "com.skul9x.rssreader.PLAY"
         const val ACTION_RESUME = "com.skul9x.rssreader.RESUME"
+        const val ACTION_START_CONTINUOUS = "com.skul9x.rssreader.START_CONTINUOUS"
         
         const val EXTRA_NEWS_ITEMS = "news_items"
         const val EXTRA_NEWS_ITEM = "news_item"
@@ -136,6 +138,12 @@ class NewsReaderService : Service() {
     
     // Resume support: Track if current item finished reading
     @Volatile private var isItemCompleted: Boolean = true
+
+    // Continuous reading mode state
+    @Volatile private var isContinuousMode: Boolean = false
+    private var continuousTimeoutJob: Job? = null
+    private var continuousStartTime: Long = 0L
+    private val CONTINUOUS_DEFAULT_TIMEOUT_MS = 30 * 60 * 1000L // 30 minutes
 
     // Binder for Activity connection
     inner class LocalBinder : Binder() {
@@ -299,7 +307,7 @@ class NewsReaderService : Service() {
             Log.d(TAG, "onStartCommand: ${intent?.action}")
     
             // CRITICAL: Must call startForeground immediately to avoid ANR/Crash on Android 8+
-            if (intent?.action == ACTION_START_READ_ALL || intent?.action == ACTION_READ_SINGLE || intent?.action == ACTION_RESUME) {
+            if (intent?.action == ACTION_START_READ_ALL || intent?.action == ACTION_READ_SINGLE || intent?.action == ACTION_RESUME || intent?.action == ACTION_START_CONTINUOUS) {
                 startForegroundSafely("Đang chuẩn bị...")
             }
             
@@ -407,6 +415,28 @@ class NewsReaderService : Service() {
                         resumeFromState(state)
                     } else {
                         DebugLogger.log(TAG, "No resumable content available")
+                        stopSelf()
+                    }
+                }
+                ACTION_START_CONTINUOUS -> {
+                    DebugLogger.log(TAG, "Command: Start Continuous Reading")
+                    @Suppress("DEPRECATION")
+                    val items = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableArrayListExtra(EXTRA_NEWS_ITEMS, NewsItem::class.java)
+                    } else {
+                        intent.getParcelableArrayListExtra(EXTRA_NEWS_ITEMS)
+                    }
+                    
+                    if (items != null && items.isNotEmpty()) {
+                        newsItems = items
+                        currentNewsIndex = 0
+                        isReadAllMode = true
+                        isContinuousMode = true
+                        readFullContent = false
+                        startContinuousReading()
+                    } else {
+                        Log.e(TAG, "No items for continuous reading")
+                        DebugLogger.log(TAG, "Error: No items for continuous reading")
                         stopSelf()
                     }
                 }
@@ -735,6 +765,236 @@ class NewsReaderService : Service() {
         }
     }
 
+    /**
+     * Start Continuous Reading Mode.
+     * Infinite loop: Read batch → Refresh → Wait for translations → Read next batch.
+     * Stops after 30 minutes or on user stop, or if RSS is exhausted.
+     */
+    private fun startContinuousReading() {
+        readAllJob?.cancel()
+        continuousTimeoutJob?.cancel()
+        releaseWakeLockSafely()
+        startWakeLockMonitor()
+        
+        continuousStartTime = System.currentTimeMillis()
+        
+        // Timeout safety: auto-stop after 30 minutes
+        continuousTimeoutJob = serviceScope.launch {
+            delay(CONTINUOUS_DEFAULT_TIMEOUT_MS)
+            DebugLogger.log(TAG, ">>> Continuous mode timeout reached (30m)")
+            ttsManager.speakAndWait("Đã hết thời gian đọc tự động 30 phút. Tạm dừng ạ.")
+            stopReading()
+            stopSelf()
+        }
+        
+        readAllJob = serviceScope.launch {
+            _serviceState.update { it.copy(
+                isReading = true,
+                currentIndex = 0,
+                isReadAllMode = true,
+                isContinuousMode = true,
+                error = null
+            )}
+            updatePlaybackState(true)
+            
+            var roundNumber = 1
+            
+            try {
+                ttsManager.ensureSilentAudioRunning()
+                geminiClient.refreshApiKeys()
+                
+                while (isActive && isContinuousMode) {
+                    val elapsed = System.currentTimeMillis() - continuousStartTime
+                    if (elapsed >= CONTINUOUS_DEFAULT_TIMEOUT_MS) break
+                    
+                    DebugLogger.log(TAG, ">>> Continuous round #$roundNumber, ${newsItems.size} items")
+                    
+                    // Read current batch (reuses same logic as startReadingAllFromIndex)
+                    val success = readCurrentBatch()
+                    if (!success || !isActive || !isContinuousMode) break
+                    
+                    // Announce next round
+                    ttsManager.speakAndWait("Đang tải 5 tin mới...")
+                    updateNotification("Đang tải tin mới...")
+                    
+                    // Refresh news (fetch new 5 items from repository)
+                    val newItems = refreshNewsForContinuous()
+                    if (newItems.isEmpty() || !isActive || !isContinuousMode) {
+                        ttsManager.speakAndWait("Đã đọc hết tin trong RSS, mong anh kiểm tra lại ạ.")
+                        break
+                    }
+                    
+                    // Wait for translations if needed (MUST complete before reading)
+                    val translatedItems = waitForTranslations(newItems)
+                    
+                    // Update internal state with new items and BROADCAST to UI (Fix Bug 1)
+                    newsItems = ArrayList(translatedItems)
+                    currentNewsIndex = 0
+                    _serviceState.update { it.copy(
+                        currentIndex = 0, 
+                        continuousNewsItems = translatedItems
+                    ) }
+                    
+                    roundNumber++
+                }
+                
+                // Clean finish
+                val totalMinutes = (System.currentTimeMillis() - continuousStartTime) / 60000
+                val closingMsg = "Đã kết thúc chế độ đọc tự động sau $totalMinutes phút."
+                ttsManager.speakAndWait(closingMsg)
+                
+                _serviceState.update { it.copy(
+                    isReading = false,
+                    currentIndex = -1,
+                    isContinuousMode = false,
+                    currentSummary = closingMsg
+                )}
+                updatePlaybackState(false)
+                delay(2000)
+                stopSelf()
+                
+            } catch (e: CancellationException) {
+                Log.d(TAG, "Continuous reading cancelled")
+                _serviceState.update { it.copy(isReading = false, currentIndex = -1, isContinuousMode = false) }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in continuous reading", e)
+                _serviceState.update { it.copy(
+                    isReading = false,
+                    currentIndex = -1,
+                    isContinuousMode = false,
+                    error = "Lỗi: ${e.message}"
+                )}
+                updatePlaybackState(false)
+                stopSelf()
+            } finally {
+                continuousTimeoutJob?.cancel()
+                isContinuousMode = false
+            }
+        }
+    }
+
+    /**
+     * Read all items in the current newsItems list sequentially.
+     * Returns true if completed normally, false if interrupted.
+     */
+    private suspend fun readCurrentBatch(): Boolean {
+        val ordinalWords = listOf("nhất", "hai", "ba", "bốn", "năm")
+        
+        for (index in 0 until newsItems.size) {
+            if (!currentCoroutineContext().isActive || !isContinuousMode) return false
+            
+            val news = newsItems[index]
+            currentNewsIndex = index
+            isItemCompleted = false
+            
+            val titleToSpeak = news.translatedTitle ?: news.title
+            _serviceState.update { it.copy(currentIndex = index, currentTitle = titleToSpeak) }
+            updateNotification("Đang đọc: $titleToSpeak")
+            updateMetadata(titleToSpeak, news.sourceName)
+            
+            val ordinal = ordinalWords.getOrElse(index) { "${index + 1}" }
+            
+            // Speak title
+            val introJob = serviceScope.launch { ttsManager.speakAndWait("Tin thứ $ordinal, $titleToSpeak.") }
+            
+            // Summarize in background
+            val summaryDeferred = serviceScope.async(Dispatchers.IO) {
+                try {
+                    var content = news.getContentForSummary()
+                    if (content.length < 500 && news.link.isNotBlank()) {
+                        val fullContent = articleFetcher.fetchArticleContent(news.link)
+                        if (fullContent != null && fullContent.length > content.length) {
+                            content = fullContent
+                        }
+                    }
+                    val result = geminiClient.summarizeForTts(content, news.link)
+                    result.getTextOrFallback()
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) {
+                    Log.w(TAG, "Error summarizing in continuous mode: ${e.message}")
+                    news.description.take(200)
+                }
+            }
+            
+            introJob.join()
+            val summaryText = summaryDeferred.await()
+            if (!currentCoroutineContext().isActive || !isContinuousMode) return false
+            
+            currentFullText = summaryText
+            val sentences = ttsManager.splitTextIntoSentences(summaryText)
+            _serviceState.update { it.copy(currentSummary = summaryText) }
+            
+            val completedNormally = ttsManager.speakSentencesAndWait(sentences)
+            if (completedNormally) {
+                isItemCompleted = true
+                clearResumeState()
+                ttsManager.resetSentenceTracking()
+                
+                // Mark as read to prevent duplicates in continuous mode (Fix Bug 2)
+                withContext(Dispatchers.IO) {
+                    readNewsDao.markAsRead(com.skul9x.rssreader.data.model.ReadNewsItem(newsId = news.id))
+                }
+            } else {
+                return false // Interrupted
+            }
+            
+            if (index < newsItems.size - 1) delay(1000)
+        }
+        return true
+    }
+
+    /**
+     * Fetch 5 new random items directly from repository for continuous mode.
+     * Returns empty list on failure or if RSS is exhausted.
+     */
+    private suspend fun refreshNewsForContinuous(): List<NewsItem> = withContext(Dispatchers.IO) {
+        try {
+            val db = AppDatabase.getDatabase(this@NewsReaderService)
+            val localSync = com.skul9x.rssreader.RssApplication.getLocalSyncRepository()
+            val repo = com.skul9x.rssreader.data.repository.RssRepository(
+                db.rssFeedDao(),
+                db.cachedNewsDao(),
+                db.readNewsDao(),
+                localSyncRepository = localSync
+            )
+            repo.refreshVozAndGetRandomNews(5)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to refresh news for continuous mode", e)
+            emptyList()
+        }
+    }
+
+    /**
+     * Check and translate non-Vietnamese titles. Blocks until translation completes.
+     * Returns items with translatedTitle populated where applicable.
+     * Falls back to original titles if translation fails.
+     */
+    private suspend fun waitForTranslations(items: List<NewsItem>): List<NewsItem> {
+        val itemsToTranslate = items.filter {
+            it.translatedTitle == null && !com.skul9x.rssreader.utils.VietnameseDetector.isVietnamese(it.title)
+        }
+        
+        if (itemsToTranslate.isEmpty()) return items
+        
+        DebugLogger.log(TAG, ">>> Continuous: Translating ${itemsToTranslate.size} titles...")
+        updateNotification("Đang dịch ${itemsToTranslate.size} tiêu đề...")
+        
+        return try {
+            val titlesMap = itemsToTranslate.associate { it.id to it.title }
+            val translatedMap = withContext(Dispatchers.IO) {
+                geminiClient.translateTitleBatch(titlesMap)
+            }
+            
+            items.map { item ->
+                val translated = translatedMap[item.id]
+                if (translated != null) item.copy(translatedTitle = translated) else item
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Translation failed in continuous mode, using original titles", e)
+            items // Fallback: use original titles if translation fails
+        }
+    }
+
     fun stopReading() {
         DebugLogger.log(TAG, ">>> Stopping reading")
         
@@ -749,8 +1009,10 @@ class NewsReaderService : Service() {
         }
         
         readAllJob?.cancel()
+        continuousTimeoutJob?.cancel()
+        isContinuousMode = false
         ttsManager.stop()
-        _serviceState.update { it.copy(isReading = false, currentIndex = -1, isReadAllMode = false) }
+        _serviceState.update { it.copy(isReading = false, currentIndex = -1, isReadAllMode = false, isContinuousMode = false) }
         updatePlaybackState(false)
         
         // FIX: Reset navigation flag
@@ -1344,6 +1606,8 @@ data class NewsReaderState(
     val isReading: Boolean = false,
     val currentIndex: Int = -1,
     val isReadAllMode: Boolean = false,
+    val isContinuousMode: Boolean = false,
+    val continuousNewsItems: List<NewsItem>? = null, // Sync new items to UI in continuous mode
     val currentTitle: String? = null,
     val currentSummary: String? = null,
     val error: String? = null,

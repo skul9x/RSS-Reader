@@ -5,7 +5,11 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.input.pointer.pointerInput
+import android.widget.Toast
+import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -144,24 +148,47 @@ fun MainScreenPortrait(
                                 remember { mutableFloatStateOf(1f) }
                             }
 
-                            IconButton(
-                                onClick = { 
-                                    if (isReadingAll) viewModel.stopSpeaking() 
-                                    else viewModel.readAllNewsSummaries() 
-                                },
-                                enabled = uiState.newsItems.isNotEmpty() && !uiState.isSummarizing && !isSpeaking || isReadingAll,
+                            val isContinuousMode = uiState.isContinuousMode
+                            val isButtonEnabled = (uiState.newsItems.isNotEmpty() && !uiState.isSummarizing && !isSpeaking) || isReadingAll || isContinuousMode
+
+                            Box(
                                 modifier = Modifier
                                     .size(48.dp)
-                                    .alpha(alpha)
+                                    .alpha(if (isButtonEnabled) alpha else 0.4f)
                                     .background(
-                                        color = if (isReadingAll) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.primaryContainer,
+                                        color = when {
+                                            isContinuousMode -> MaterialTheme.colorScheme.error.copy(alpha = 0.85f)
+                                            isReadingAll -> MaterialTheme.colorScheme.tertiaryContainer
+                                            else -> MaterialTheme.colorScheme.primaryContainer
+                                        },
                                         shape = CircleShape
                                     )
+                                    .pointerInput(isReadingAll, isContinuousMode, isButtonEnabled) {
+                                        detectTapGestures(
+                                            onTap = {
+                                                if (!isButtonEnabled) return@detectTapGestures
+                                                if (isReadingAll || isContinuousMode) viewModel.stopSpeaking()
+                                                else viewModel.readAllNewsSummaries()
+                                            },
+                                            onLongPress = {
+                                                if (!isButtonEnabled) return@detectTapGestures
+                                                if (!isReadingAll && !isContinuousMode) {
+                                                    viewModel.startContinuousReading()
+                                                    Toast.makeText(context, "\uD83D\uDD04 Bật đọc liên tục 30 phút", Toast.LENGTH_LONG).show()
+                                                }
+                                            }
+                                        )
+                                    },
+                                contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.PlaylistPlay,
-                                    contentDescription = "Đọc 5 tin",
-                                    tint = if (isReadingAll) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onPrimaryContainer,
+                                    imageVector = if (isContinuousMode) Icons.Default.AllInclusive else Icons.Default.PlaylistPlay,
+                                    contentDescription = if (isContinuousMode) "Đang đọc liên tục" else "Đọc 5 tin",
+                                    tint = when {
+                                        isContinuousMode -> MaterialTheme.colorScheme.onError
+                                        isReadingAll -> MaterialTheme.colorScheme.onTertiaryContainer
+                                        else -> MaterialTheme.colorScheme.onPrimaryContainer
+                                    },
                                     modifier = Modifier.size(28.dp)
                                 )
                             }
@@ -271,6 +298,7 @@ fun MainScreenPortrait(
                                                 index = index,
                                                 isSelected = isHighlighted,
                                                 isPlaying = isActiveItem,
+                                                isContinuousMode = uiState.isContinuousMode,
                                                 readingProgress = if (index == uiState.readingNewsIndex) uiState.readingProgress else 0f,
                                                 useMarquee = (index == selectedIndex),
                                                 isGlassMode = true,

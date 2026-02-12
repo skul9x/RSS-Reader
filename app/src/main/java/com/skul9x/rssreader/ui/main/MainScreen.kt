@@ -150,6 +150,7 @@ fun MainScreen(
                             readingIndex = uiState.readingNewsIndex,
                             isSpeaking = isSpeaking,
                             isSummarizing = uiState.isSummarizing,  // FIX: Pass service reading state
+                            isContinuousMode = uiState.isContinuousMode,
                             readingProgress = uiState.readingProgress,
                             hasResumableContent = uiState.hasResumableContent,
                             resumableNewsIndex = uiState.resumableNewsIndex,
@@ -240,6 +241,7 @@ private fun NewsList(
     readingIndex: Int,
     isSpeaking: Boolean,
     isSummarizing: Boolean,  // FIX: Service reading state for proper resume button hiding
+    isContinuousMode: Boolean = false,
     readingProgress: Float,
     hasResumableContent: Boolean,
     resumableNewsIndex: Int,
@@ -283,6 +285,7 @@ private fun NewsList(
                     index = index,
                     isSelected = isHighlighted,
                     isPlaying = showPulse,
+                    isContinuousMode = isContinuousMode,
                     readingProgress = if (index == readingIndex) readingProgress else 0f,
                     maxLines = 6,
                     onClick = { onSelectNews(index) },
