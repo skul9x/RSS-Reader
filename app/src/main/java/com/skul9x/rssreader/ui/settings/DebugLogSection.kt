@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.skul9x.rssreader.utils.DebugLogger
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DebugLogSection(
     modifier: Modifier = Modifier
@@ -34,9 +35,14 @@ fun DebugLogSection(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     
+    var selectedTag by remember { mutableStateOf("All") }
+    val filteredLogs = remember(logs, selectedTag) {
+        if (selectedTag == "All") logs else logs.filter { it.tag == selectedTag }
+    }
+    
     val listState = rememberLazyListState()
-    LaunchedEffect(logs.size) {
-        if (logs.isNotEmpty()) {
+    LaunchedEffect(filteredLogs.size) {
+        if (filteredLogs.isNotEmpty()) {
             listState.scrollToItem(0)
         }
     }
@@ -153,6 +159,34 @@ fun DebugLogSection(
                     
                     Spacer(modifier = Modifier.height(8.dp))
                     
+                    val tags = remember(logs) {
+                        listOf("All", "READ", "SYNC") + logs.map { it.tag }.filter { it != "READ" && it != "SYNC" }.distinct().sorted()
+                    }
+                    
+                    ScrollableTabRow(
+                        selectedTabIndex = tags.indexOf(selectedTag).coerceAtLeast(0),
+                        edgePadding = 0.dp,
+                        containerColor = Color.Transparent,
+                        divider = {},
+                        indicator = {}
+                    ) {
+                        tags.forEach { tag ->
+                            val isSelected = selectedTag == tag
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { selectedTag = tag },
+                                label = { Text(tag, style = MaterialTheme.typography.labelSmall) },
+                                modifier = Modifier.padding(horizontal = 4.dp),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            )
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
                     HorizontalDivider()
                     
                     Spacer(modifier = Modifier.height(8.dp))
@@ -160,13 +194,13 @@ fun DebugLogSection(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(200.dp)
+                            .height(250.dp) // Slightly taller for more context
                             .background(Color.Black.copy(alpha = 0.05f), RoundedCornerShape(4.dp))
                             .padding(8.dp)
                     ) {
-                        if (logs.isEmpty()) {
+                        if (filteredLogs.isEmpty()) {
                             Text(
-                                text = "No logs yet. Press media buttons to test.",
+                                text = if (selectedTag == "All") "No logs yet." else "No logs with tag '$selectedTag'",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.align(Alignment.Center)
@@ -176,8 +210,8 @@ fun DebugLogSection(
                                 state = listState,
                                 reverseLayout = false
                             ) {
-                                items(logs.size) { index ->
-                                    val log = logs[index]
+                                items(filteredLogs.size) { index ->
+                                    val log = filteredLogs[index]
                                     Text(
                                         text = "[${log.timeString}] ${log.tag}: ${log.message}",
                                         style = MaterialTheme.typography.bodySmall.copy(

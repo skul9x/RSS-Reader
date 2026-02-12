@@ -14,5 +14,5 @@ object AppConfig {
      * Whether to show the Debug Log (Media Buttons) section in Settings.
      * Default is false to keep the UI clean for users.
      */
-    const val SHOW_DEBUG_LOG = false
+    const val SHOW_DEBUG_LOG = true
 }

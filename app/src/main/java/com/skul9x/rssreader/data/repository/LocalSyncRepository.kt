@@ -8,6 +8,7 @@ import com.skul9x.rssreader.data.model.ReadNewsItem
 import com.skul9x.rssreader.data.model.SyncStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import com.skul9x.rssreader.utils.DebugLogger
 
 /**
  * Repository for local sync operations.
@@ -38,6 +39,7 @@ class LocalSyncRepository(
             syncStatus = SyncStatus.PENDING
         )
         dao.markAsRead(item)
+        DebugLogger.log("SYNC", "markAsRead: ID=$newsId, Device=$deviceType")
         
         // Add to batch queue for Firebase sync (if available)
         batchQueueManager?.addToQueue(newsId)

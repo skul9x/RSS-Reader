@@ -14,6 +14,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import com.skul9x.rssreader.utils.DebugLogger
 import java.util.Calendar
 
 /**
@@ -60,6 +61,7 @@ class RssRepository(
     suspend fun markNewsAsRead(newsId: String) = withContext(Dispatchers.IO) {
         // Use LocalSyncRepository for sync-aware marking
         // This automatically sets device type and sync status to PENDING
+        DebugLogger.log("READ", "Marking as read: $newsId")
         localSyncRepository?.markAsRead(newsId) ?: run {
             // Fallback if LocalSyncRepository not initialized
             readNewsDao.markAsRead(ReadNewsItem(newsId = newsId))
@@ -161,11 +163,13 @@ class RssRepository(
         val candidateIds = cachedNewsDao.getUnreadNewsIdsFromFeeds(feedIds, excludedInSession)
         
         if (candidateIds.isEmpty()) {
+            DebugLogger.log("READ", "getRandomNewsFromCache: No unread candidates")
             return@withContext emptyList()
         }
 
         // 2. Shuffle in Memory (fast for < 100k items)
         val selectedIds = candidateIds.shuffled().take(count)
+        DebugLogger.log("READ", "getRandomNewsFromCache: Pool=${candidateIds.size}, Picking=${selectedIds.size}")
         
         // 3. Fetch full items by ID (fast primary key lookup)
         val cached = cachedNewsDao.getNewsByIds(selectedIds)
@@ -234,6 +238,8 @@ class RssRepository(
         // Filter out already-read items before returning
         val uniqueNews = allNews.distinctBy { it.id }
         val unreadNews = filterOutReadNews(uniqueNews)
+        
+        DebugLogger.log("READ", "refreshAndGetRandomNews: Path=Network, Fetched=${allNews.size}, Unread=${unreadNews.size}")
         
         unreadNews
             .shuffled()
