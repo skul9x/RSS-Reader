@@ -26,6 +26,9 @@ data class ResumeState(
     /** Whether this was from Read All mode */
     val isReadAllMode: Boolean = false,
     
+    /** Whether this was from Continuous Reading mode */
+    val isContinuousMode: Boolean = false,
+    
     /** Whether reading full content (vs summary) */
     val readFullContent: Boolean = false,
     

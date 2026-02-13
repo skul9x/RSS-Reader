@@ -24,6 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,6 +50,7 @@ fun MainScreenPortrait(
     viewModel: MainViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     val uiState by viewModel.uiState.collectAsState()
     val selectedIndex by viewModel.selectedNewsIndex.collectAsState()
     val isSpeaking by viewModel.ttsManager.isSpeaking.collectAsState()
@@ -163,7 +166,7 @@ fun MainScreenPortrait(
                                         },
                                         shape = CircleShape
                                     )
-                                    .pointerInput(isReadingAll, isContinuousMode, isButtonEnabled) {
+                                    .pointerInput(isReadingAll, isContinuousMode, isButtonEnabled, view) { // Added 'view' as a key
                                         detectTapGestures(
                                             onTap = {
                                                 if (!isButtonEnabled) return@detectTapGestures
@@ -173,6 +176,11 @@ fun MainScreenPortrait(
                                             onLongPress = {
                                                 if (!isButtonEnabled) return@detectTapGestures
                                                 if (!isReadingAll && !isContinuousMode) {
+                                                    // Haptic feedback handled by view hoisted outside or directly via LocalView.current 
+                                                    // but LocalView.current is @Composable. 
+                                                    // I will use a local variable to capture it.
+                                                    view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                                                    
                                                     viewModel.startContinuousReading()
                                                     Toast.makeText(context, "\uD83D\uDD04 Bật đọc liên tục 30 phút", Toast.LENGTH_LONG).show()
                                                 }

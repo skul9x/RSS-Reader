@@ -1047,6 +1047,7 @@ class NewsReaderService : Service() {
                     sentences = sentences,
                     currentSentenceIndex = sentenceIndex,
                     isReadAllMode = isReadAllMode,
+                    isContinuousMode = isContinuousMode,
                     readFullContent = readFullContent,
                     fullText = currentFullText,
                     newsItem = news
@@ -1066,6 +1067,7 @@ class NewsReaderService : Service() {
                     sentences = emptyList(), // Empty sentences means "restart item"
                     currentSentenceIndex = 0,
                     isReadAllMode = isReadAllMode,
+                    isContinuousMode = isContinuousMode,
                     readFullContent = readFullContent,
                     newsItem = news
                 )
@@ -1096,6 +1098,7 @@ class NewsReaderService : Service() {
         // Restore service state
         currentNewsIndex = state.newsIndex
         isReadAllMode = state.isReadAllMode
+        isContinuousMode = state.isContinuousMode
         readFullContent = state.readFullContent
         currentTitle = state.newsTitle ?: ""
         
@@ -1182,6 +1185,9 @@ class NewsReaderService : Service() {
                         // Continue to next news in Read All mode
                         currentNewsIndex++
                         startReadingAllFromIndex(currentNewsIndex)
+                    } else if (isContinuousMode) {
+                        // Resume back into the continuous loop
+                        startContinuousReading()
                     } else {
                         // Single read completed
                         DebugLogger.log(TAG, ">>> Resume completed")

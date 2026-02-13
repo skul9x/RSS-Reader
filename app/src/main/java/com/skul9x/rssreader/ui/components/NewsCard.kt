@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -75,7 +76,10 @@ fun NewsCard(
         // Viền Neon Gradient khi select
         val borderModifier = if (isSelected) {
             val gradient = if (isContinuousMode) ContinuousNeonGradient else NeonGradient
-            Modifier.border(width = 2.dp, brush = gradient, shape = RoundedCornerShape(16.dp))
+            val animatedWidth = if (isPlaying) (2.dp + (1.dp * pulseAlpha)) else 2.dp
+            Modifier
+                .then(if (isPlaying) Modifier.alpha(0.5f + 0.5f * pulseAlpha) else Modifier)
+                .border(width = animatedWidth, brush = gradient, shape = RoundedCornerShape(16.dp))
         } else {
             Modifier.border(width = 1.dp, color = GlassBorder, shape = RoundedCornerShape(16.dp))
         }
