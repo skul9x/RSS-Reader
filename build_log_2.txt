@@ -1,0 +1,36 @@
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:processDebugGoogleServices UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:kspDebugKotlin
+
+> Task :app:compileDebugKotlin
+w: file:///C:/Users/Admin/Desktop/Test_code/RSS-Reader-main/app/src/main/java/com/skul9x/rssreader/data/network/GeminiApiClient.kt:359:42 'fun resume(value: Response, onCancellation: ((@ParameterName(...) Throwable) -> Unit)?): Unit' is deprecated. Use the overload that also accepts the `value` and the coroutine context in lambda.
+w: file:///C:/Users/Admin/Desktop/Test_code/RSS-Reader-main/app/src/main/java/com/skul9x/rssreader/data/network/GeminiApiClient.kt:565:42 'fun resume(value: Response, onCancellation: ((@ParameterName(...) Throwable) -> Unit)?): Unit' is deprecated. Use the overload that also accepts the `value` and the coroutine context in lambda.
+w: file:///C:/Users/Admin/Desktop/Test_code/RSS-Reader-main/app/src/main/java/com/skul9x/rssreader/data/network/GeminiApiClient.kt:971:42 'fun resume(value: Response, onCancellation: ((@ParameterName(...) Throwable) -> Unit)?): Unit' is deprecated. Use the overload that also accepts the `value` and the coroutine context in lambda.
+w: file:///C:/Users/Admin/Desktop/Test_code/RSS-Reader-main/app/src/main/java/com/skul9x/rssreader/data/network/HtmlFetcher.kt:82:42 'fun resume(value: Response, onCancellation: ((@ParameterName(...) Throwable) -> Unit)?): Unit' is deprecated. Use the overload that also accepts the `value` and the coroutine context in lambda.
+w: file:///C:/Users/Admin/Desktop/Test_code/RSS-Reader-main/app/src/main/java/com/skul9x/rssreader/service/NewsReaderService.kt:230:36 'static field FLAG_HANDLES_MEDIA_BUTTONS: Int' is deprecated. Deprecated in Java.
+w: file:///C:/Users/Admin/Desktop/Test_code/RSS-Reader-main/app/src/main/java/com/skul9x/rssreader/service/NewsReaderService.kt:231:36 'static field FLAG_HANDLES_TRANSPORT_CONTROLS: Int' is deprecated. Deprecated in Java.
+w: file:///C:/Users/Admin/Desktop/Test_code/RSS-Reader-main/app/src/main/java/com/skul9x/rssreader/tts/TtsManager.kt:394:35 'fun requestAudioFocus(p0: AudioManager.OnAudioFocusChangeListener!, p1: Int, p2: Int): Int' is deprecated. Deprecated in Java.
+w: file:///C:/Users/Admin/Desktop/Test_code/RSS-Reader-main/app/src/main/java/com/skul9x/rssreader/ui/logs/ActivityLogsScreen.kt:141:57 'val Icons.Filled.List: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.List.
+w: file:///C:/Users/Admin/Desktop/Test_code/RSS-Reader-main/app/src/main/java/com/skul9x/rssreader/ui/main/MainScreen.kt:430:49 'val Icons.Filled.PlaylistPlay: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.PlaylistPlay.
+w: file:///C:/Users/Admin/Desktop/Test_code/RSS-Reader-main/app/src/main/java/com/skul9x/rssreader/ui/main/MainScreenPortrait.kt:162:65 'val Icons.Filled.PlaylistPlay: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.PlaylistPlay.
+w: file:///C:/Users/Admin/Desktop/Test_code/RSS-Reader-main/app/src/main/java/com/skul9x/rssreader/ui/settings/AudioStreamSection.kt:53:53 'val Icons.Filled.VolumeUp: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.VolumeUp.
+w: file:///C:/Users/Admin/Desktop/Test_code/RSS-Reader-main/app/src/main/java/com/skul9x/rssreader/ui/theme/Theme.kt:167:20 'var statusBarColor: Int' is deprecated. Deprecated in Java.
+w: file:///C:/Users/Admin/Desktop/Test_code/RSS-Reader-main/app/src/main/java/com/skul9x/rssreader/ui/theme/Theme.kt:168:20 'var navigationBarColor: Int' is deprecated. Deprecated in Java.
+
+BUILD SUCCESSFUL in 11s
+16 actionable tasks: 2 executed, 14 up-to-date

@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1074376017541",
+    "project_id": "rss-reader-sync",
+    "storage_bucket": "rss-reader-sync.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1074376017541:android:158d4ab7594c13cacfcbec",
+        "android_client_info": {
+          "package_name": "com.skul9x.rssreader"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1074376017541-fesa0c3va3p93gla75juk9pgcphm1hn2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCT7PyqyhOEWes5NVkLpGw0RFD1GPJnBD8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1074376017541-fesa0c3va3p93gla75juk9pgcphm1hn2.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
