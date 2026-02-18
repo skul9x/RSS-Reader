@@ -23,6 +23,7 @@ class ContentExtractorRegistry(
         VietnamNetExtractor(htmlCleaner),
         VtcNewsExtractor(htmlCleaner),
         AiHayExtractor(htmlCleaner),
+        VnEconomyExtractor(htmlCleaner),
         VozExtractor(htmlCleaner, redirectResolver)
         // GenericExtractor is handled as explicit fallback
     )
