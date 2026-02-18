@@ -128,6 +128,9 @@ class NewsReaderService : Service() {
     // FIX: Use LocalSyncRepository for proper sync queue integration
     private val localSyncRepo by lazy { com.skul9x.rssreader.RssApplication.getLocalSyncRepository() }
     
+    // Activity Logs for user-visible debugging
+    private val activityLogDao by lazy { AppDatabase.getDatabase(this).activityLogDao() }
+    
     // FIX: Track if user is navigating in single mode (Next/Prev pressed)
     // When true, service should NOT auto-stop after reading one item
     @Volatile private var isNavigatingInSingleMode: Boolean = false
@@ -519,6 +522,22 @@ class NewsReaderService : Service() {
                     updateNotification("Đang đọc: $titleToSpeak")
                     updateMetadata(titleToSpeak, news.sourceName)
                     
+                    // FIX: Mark as read IMMEDIATELY when starting to read the title
+                    val newsId = news.id
+                    val title = news.title
+                    val link = news.link
+                    serviceScope.launch(Dispatchers.IO) {
+                        try {
+                            logActivity("MARK_READ", "Đã đánh dấu đã đọc (Single): $title", link, "ID: $newsId")
+                            localSyncRepo?.markAsRead(newsId) 
+                                ?: readNewsDao.markAsRead(ReadNewsItem(newsId = newsId))
+                            Log.d(TAG, "Successfully marked as read (Single): $title")
+                        } catch (e: Exception) {
+                            logActivity("MARK_READ_ERROR", "Lỗi đánh dấu (Single): $title", link, e.message, true)
+                            Log.w(TAG, "Failed to mark as read in single read: ${e.message}")
+                        }
+                    }
+                    
                     // Speak title (not tracked for resume - title is short)
                     val introJob = launch {
                         ttsManager.speakAndWait(titleToSpeak)
@@ -668,6 +687,19 @@ class NewsReaderService : Service() {
                     updateNotification("Đang đọc: $titleToSpeak")
                     updateMetadata(titleToSpeak, news.sourceName)
                     
+                    // FIX: Mark as read IMMEDIATELY when starting to read the title in batch mode
+                    serviceScope.launch(Dispatchers.IO) {
+                        try {
+                            logActivity("MARK_READ", "Đã đánh dấu đã đọc (Batch): ${news.title}", news.link, "ID: ${news.id}")
+                            localSyncRepo?.markAsRead(news.id) 
+                                ?: readNewsDao.markAsRead(com.skul9x.rssreader.data.model.ReadNewsItem(newsId = news.id))
+                            Log.d(TAG, "Successfully marked as read: ${news.title}")
+                        } catch (e: Exception) {
+                            logActivity("MARK_READ_ERROR", "Lỗi đánh dấu (Batch): ${news.title}", news.link, e.message, true)
+                            Log.w(TAG, "Failed to mark as read in batch: ${e.message}")
+                        }
+                    }
+                    
                     val ordinal = ordinalWords.getOrElse(index) { "${index + 1}" }
                     
                     // Speak title
@@ -717,16 +749,6 @@ class NewsReaderService : Service() {
                         // Clear resume state on successful completion
                         clearResumeState()
                         ttsManager.resetSentenceTracking()
-
-                        // Mark as read after successful completion
-                        launch(Dispatchers.IO) {
-                            try {
-                                localSyncRepo?.markAsRead(news.id) 
-                                    ?: readNewsDao.markAsRead(com.skul9x.rssreader.data.model.ReadNewsItem(newsId = news.id))
-                            } catch (e: Exception) {
-                                Log.w(TAG, "Failed to mark as read: ${e.message}")
-                            }
-                        }
                     } else {
                         // Reading was interrupted (phone call, etc.)
                         DebugLogger.log(TAG, ">>> ReadAll item interrupted, keeping resume state")
@@ -902,6 +924,21 @@ class NewsReaderService : Service() {
             updateNotification("Đang đọc: $titleToSpeak")
             updateMetadata(titleToSpeak, news.sourceName)
             
+            // FIX: Mark as read IMMEDIATELY when starting to read the title in continuous mode
+            val newsId = news.id
+            val title = news.title
+            val link = news.link
+            serviceScope.launch(Dispatchers.IO) {
+                try {
+                    logActivity("MARK_READ", "Đã đánh dấu đã đọc (Continuous): $title", link, "ID: $newsId")
+                    localSyncRepo?.markAsRead(newsId)
+                        ?: readNewsDao.markAsRead(com.skul9x.rssreader.data.model.ReadNewsItem(newsId = newsId))
+                } catch (e: Exception) {
+                    logActivity("MARK_READ_ERROR", "Lỗi đánh dấu (Continuous): $title", link, e.message, true)
+                    Log.w(TAG, "Failed to mark as read in continuous mode: ${e.message}")
+                }
+            }
+            
             val ordinal = ordinalWords.getOrElse(index) { "${index + 1}" }
             
             // Speak title
@@ -939,11 +976,6 @@ class NewsReaderService : Service() {
                 isItemCompleted = true
                 clearResumeState()
                 ttsManager.resetSentenceTracking()
-                
-                // Mark as read to prevent duplicates in continuous mode (Fix Bug 2)
-                withContext(Dispatchers.IO) {
-                    readNewsDao.markAsRead(com.skul9x.rssreader.data.model.ReadNewsItem(newsId = news.id))
-                }
             } else {
                 return false // Interrupted
             }
@@ -1347,9 +1379,11 @@ class NewsReaderService : Service() {
                             // Mark the target news as read - FIRE AND FORGET (don't block skip!)
                             serviceScope.launch(Dispatchers.IO) {
                                 try {
+                                    logActivity("MARK_READ", "Đã đánh dấu đã đọc (Skip Next): ${targetItem.title}", targetItem.link, "ID: ${targetItem.id}")
                                     localSyncRepo?.markAsRead(targetItem.id) 
                                         ?: readNewsDao.markAsRead(ReadNewsItem(newsId = targetItem.id))
                                 } catch (e: Exception) {
+                                    logActivity("MARK_READ_ERROR", "Lỗi đánh dấu (Skip Next): ${targetItem.title}", targetItem.link, e.message, true)
                                     Log.w(TAG, "Failed to mark news as read: ${e.message}")
                                 }
                             }
@@ -1434,9 +1468,11 @@ class NewsReaderService : Service() {
                             // Mark the target news as read - FIRE AND FORGET (don't block skip!)
                             serviceScope.launch(Dispatchers.IO) {
                                 try {
+                                    logActivity("MARK_READ", "Đã đánh dấu đã đọc (Skip Prev): ${targetItem.title}", targetItem.link, "ID: ${targetItem.id}")
                                     localSyncRepo?.markAsRead(targetItem.id) 
                                         ?: readNewsDao.markAsRead(ReadNewsItem(newsId = targetItem.id))
                                 } catch (e: Exception) {
+                                    logActivity("MARK_READ_ERROR", "Lỗi đánh dấu (Skip Prev): ${targetItem.title}", targetItem.link, e.message, true)
                                     Log.w(TAG, "Failed to mark news as read: ${e.message}")
                                 }
                             }
@@ -1612,6 +1648,32 @@ class NewsReaderService : Service() {
         
         // Reset static state so UI stops blinking
         resetState()
+    }
+
+    /**
+     * Log activity to both Logcat/DebugLogger and persistent Activity Logs DB.
+     * Fires and forgets on serviceScope.
+     */
+    private fun logActivity(eventType: String, message: String, url: String = "", details: String? = null, isError: Boolean = false) {
+        // 1. Log to internal DebugLogger (Logcat replacement)
+        DebugLogger.log(TAG, "[$eventType] $message")
+        
+        // 2. Log to persistent DB for "Activity Logs" screen
+        serviceScope.launch(Dispatchers.IO) {
+            try {
+                activityLogDao.insert(
+                    com.skul9x.rssreader.data.model.ActivityLog(
+                        eventType = eventType,
+                        message = message,
+                        url = url,
+                        details = details,
+                        isError = isError
+                    )
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to write to ActivityLog: ${e.message}")
+            }
+        }
     }
 }
 
