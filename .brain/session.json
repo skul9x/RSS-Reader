@@ -1,0 +1,27 @@
+{
+  "updated_at": "2026-03-21T00:36:00Z",
+  "working_on": {
+    "feature": "Landscape Mode for Continuous Reading",
+    "task": "Starting Phase 1 of Landscape plan (LandscapePlayAllButton)",
+    "status": "built",
+    "files": ["plan-landscape.txt"],
+    "blockers": [],
+    "last_build": "d:\\Hoc_C\\RSS-Reader-refactor\\app\\build\\outputs\\apk\\debug\\app-debug.apk",
+    "notes": "Build APK successful. Bugfix campaign Phase 1-4 completed successfully. Ready to implement Continuous Reading in Landscape mode."
+  },
+  "pending_tasks": [
+    { "task": "Implement LandscapePlayAllButton", "priority": "medium", "notes": "As per Phase 1 of plan-landscape.txt" },
+    { "task": "Integrate into MainScreen.kt Landscape layout", "priority": "medium", "notes": "As per Phase 2 of plan-landscape.txt" }
+  ],
+  "recent_changes": [
+    { "timestamp": "2026-03-21T00:30:00Z", "type": "bugfix", "description": "Phase 2 & 4: Implemented RssRepository memory caching and MainViewModel continuous mark-as-read.", "files": ["RssRepository.kt", "MainViewModel.kt"] },
+    { "timestamp": "2026-03-21T00:27:00Z", "type": "bugfix", "description": "Phase 3: URL/ID Normalization to prevent duplicate items from utm_ tracking tags.", "files": ["RssParser.kt"] }
+  ],
+  "errors_encountered": [
+    { "error": "Build failed due to missing SDK path", "solution": "Set sdk.dir in local.properties", "resolved": true }
+  ],
+  "decisions_made": [
+    { "decision": "Implemented SQL-based ID filtering instead of loading all to RAM", "reason": "Better performance and OOM prevention" },
+    { "decision": "Added ConcurrentHashMap memory cache for read status", "reason": "Eliminates race condition while DB write is pending" }
+  ]
+}
