@@ -100,6 +100,8 @@ class RssRepository(
         val retentionDays = com.skul9x.rssreader.utils.AppConfig.READ_HISTORY_RETENTION_DAYS
         val cutoffTime = System.currentTimeMillis() - (retentionDays * 24 * 60 * 60 * 1000L)
         readNewsDao.deleteOlderThan(cutoffTime)
+        // Xóa cache in-memory để giải phóng RAM
+        memoryPendingReadIds.clear()
     }
 
     /**

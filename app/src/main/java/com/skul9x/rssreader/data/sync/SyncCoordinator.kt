@@ -54,10 +54,13 @@ class SyncCoordinator @VisibleForTesting internal constructor(
         // 1. Upload pending local items
         val pendingItems = localRepo.getPendingItems()
         if (pendingItems.isNotEmpty()) {
-            firestoreRepo.uploadBatch(pendingItems)
-            // Mark as SYNCED immediately after successful upload
-            // to prevent duplicate uploads if later steps fail
-            localRepo.markAsSynced(pendingItems.map { it.newsId })
+            // Chunking at 400 to stay under Firestore 500 ops limit
+            pendingItems.chunked(400).forEach { chunk ->
+                firestoreRepo.uploadBatch(chunk)
+                // Mark as SYNCED immediately after successful chunk upload
+                // to prevent duplicate uploads if later requests fail
+                localRepo.markAsSynced(chunk.map { it.newsId })
+            }
         }
 
         // 2. Download remote items (Incremental Sync)

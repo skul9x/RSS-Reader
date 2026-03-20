@@ -50,23 +50,19 @@ class FirestoreSyncRepository private constructor(
         
         try {
             val collection = getUserCollection()
-
-            // Firestore batches are limited to 500 operations. 
-            // Chunking at 400 for a safe margin.
-            items.chunked(400).forEach { chunk ->
-                val batch = firestore.batch()
-                chunk.forEach { item ->
-                    val docRef = collection.document(item.newsId)
-                    val data = hashMapOf(
-                        "newsItemId" to item.newsId,
-                        "readTimestamp" to item.readAt,
-                        "deviceType" to item.deviceType,
-                        "updatedAt" to FieldValue.serverTimestamp()
-                    )
-                    batch.set(docRef, data, SetOptions.merge())
-                }
-                batch.commit().await()
+            val batch = firestore.batch()
+            
+            items.forEach { item ->
+                val docRef = collection.document(item.newsId)
+                val data = hashMapOf(
+                    "newsItemId" to item.newsId,
+                    "readTimestamp" to item.readAt,
+                    "deviceType" to item.deviceType,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+                batch.set(docRef, data, SetOptions.merge())
             }
+            batch.commit().await()
 
             logRepo?.logSuccess("Uploaded ${items.size} items in total", "IDs: ${items.take(5).map { it.newsId }}...")
         } catch (e: Exception) {
@@ -137,22 +133,27 @@ class FirestoreSyncRepository private constructor(
             // NOTE: This query requires a Composite Index on 'readTimestamp' (ASC) and 'newsItemId' (ASC/DESC)
             // if used with other filters, or at least an Single Field Index on 'readTimestamp'.
             // If the query fails, check the Logcat for a generated link to create the index in Firebase Console.
-            val querySnapshot = getUserCollection()
-                .whereLessThan("readTimestamp", olderThan)
-                .get()
-                .await()
+            var totalDeleted = 0
+            do {
+                val querySnapshot = getUserCollection()
+                    .whereLessThan("readTimestamp", olderThan)
+                    .limit(500)
+                    .get()
+                    .await()
 
-            val total = querySnapshot.size()
-            if (total > 0) {
-                // Process in chunks of 400 to stay safely under 500 limit
-                querySnapshot.documents.chunked(400).forEach { chunk ->
-                    val batch = firestore.batch() // Create new batch for each chunk
-                    chunk.forEach { doc ->
-                        batch.delete(doc.reference)
-                    }
-                    batch.commit().await()
+                val batchSize = querySnapshot.size()
+                if (batchSize == 0) break
+
+                val batch = firestore.batch()
+                querySnapshot.documents.forEach { doc ->
+                    batch.delete(doc.reference)
                 }
-                logRepo?.logInfo("Deleted $total old items from Firestore", "Older than: $olderThan")
+                batch.commit().await()
+                totalDeleted += batchSize
+            } while (batchSize == 500)
+
+            if (totalDeleted > 0) {
+                logRepo?.logInfo("Deleted $totalDeleted old items from Firestore", "Older than: $olderThan")
             }
         } catch (e: Exception) {
             logRepo?.logError("Failed to delete old items from Firestore", e)
