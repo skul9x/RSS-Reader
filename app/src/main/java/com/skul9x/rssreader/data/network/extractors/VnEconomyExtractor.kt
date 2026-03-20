@@ -10,7 +10,8 @@ class VnEconomyExtractor(private val htmlCleaner: HtmlCleaner) : SiteContentExtr
         
         // Vneconomy patterns
         private val SAPO_REGEX = Regex("""<div[^>]*class="[^"]*news-sapo[^"]*"[^>]*>(.*?)</div>""", REGEX_OPTIONS)
-        private val PARAGRAPH_REGEX = Regex("""<p[^>]*>(.*?)</p>""", REGEX_OPTIONS)
+        // Matches <p>, <h3>, <figcaption> — covers paragraphs, section headings, and image captions
+        private val CONTENT_ELEMENT_REGEX = Regex("""<(?:p|h3|figcaption)[^>]*>(.*?)</(?:p|h3|figcaption)>""", REGEX_OPTIONS)
     }
 
     override fun supports(url: String): Boolean {
@@ -61,12 +62,15 @@ class VnEconomyExtractor(private val htmlCleaner: HtmlCleaner) : SiteContentExtr
             
             if (endIndex != -1) {
                 bodyHtml = html.substring(startIndex, endIndex)
+            } else {
+                // Fallback: take a reasonable chunk when no end marker found
+                bodyHtml = html.substring(startIndex).take(30000)
             }
         }
         
         // Process the body HTML if found
         if (bodyHtml != null) {
-            val paragraphs = PARAGRAPH_REGEX
+            val paragraphs = CONTENT_ELEMENT_REGEX
                 .findAll(bodyHtml)
                 .map { htmlCleaner.clean(it.groupValues[1]) }
                 .filter { it.isNotBlank() && it.length > 20 }
@@ -97,7 +101,7 @@ class VnEconomyExtractor(private val htmlCleaner: HtmlCleaner) : SiteContentExtr
         val body = workingDoc.select("[data-field=body]")
         
         // Select P tags and H tags (content usually has H3/H4)
-        val elements = body.select("p, h2, h3, h4, h5, ul li")
+        val elements = body.select("p, h2, h3, h4, h5, ul li, figcaption")
         
         val textParts = elements.eachText()
         if (textParts.isNotEmpty()) {
