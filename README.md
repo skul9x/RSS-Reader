@@ -1,59 +1,49 @@
-# 🚗 RSS Reader (Automotiveized) | Smart News for Cabin
-[![Build Status](https://img.shields.io/badge/Build-Success-brightgreen)](https://github.com/skul9x/RSS-Reader-main)
-[![Tech Stack](https://img.shields.io/badge/Tech-Kotlin_%7C_Compose_%7C_Gemini-blue)](https://kotlinlang.org/)
-
-**RSS Reader** là ứng dụng đọc tin tức tiên tiến được thiết kế riêng cho màn hình Android Box trên ô tô. Ứng dụng kết hợp giữa trí tuệ nhân tạo **Google Gemini AI** và hệ thống **Text-to-Speech (TTS)** để mang lại trải nghiệm cập nhật tin tức rảnh tay, an toàn tuyệt đối khi lái xe.
-
----
-
-## ✨ Điểm Nổi Bật (Executive Features)
-
-### 🏎️ Automotive-First Design
-*   **Giao diện Landscape tối ưu**: Chữ lớn, độ tương phản cao, thao tác "một chạm".
-*   **Điều khiển từ vô lăng**: Hỗ trợ Media Button (Next/Prev/Play/Pause) qua 2 lớp bảo vệ (MediaSession & Broadcast Receiver), tương thích cả với các dòng xe cũ.
-*   **Quản lý luồng âm thanh**: Không gây gián đoạn app dẫn đường (Google Maps, Navitel).
-
-### 🤖 Gemini AI Powered
-*   **Smart Summarization**: Tự động "bẻ khóa" nội dung bài báo và tóm tắt thành các ý chính ngắn gọn.
-*   **Multi-Model Failover**: Tự động luân chuyển API Key và chuyển đổi giữa Gemini 1.5 Flash & 2.0 Flash để đảm bảo dịch vụ không bị gián đoạn.
-*   **Regex-First Extraction**: Tốc độ xử lý cực nhanh nhờ bộ lọc Regex tối ưu cho các đầu báo lớn (VnExpress, Tuổi Trẻ, Genk...).
-
-### 🎙️ Hand-free Experience
-*   **Auto-Resume**: Tự động tiếp tục đọc từ câu vừa dừng sau khi có cuộc gọi điện thoại hoặc thông báo khẩn cấp.
-*   **Tiếng Việt tự nhiên**: Tích hợp các công cụ TTS hàng đầu cho giọng đọc mượt mà.
+<div align="center">
+  <img src="app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp" alt="RSS Reader Logo" width="128"/>
+  <h1>RSS Reader (Refactored)</h1>
+  <p><strong>Ứng dụng đọc tin tức RSS hiện đại với khả năng Tóm tắt bằng AI và Đọc văn bản (TTS)</strong></p>
+</div>
 
 ---
 
-## 🛠 Kiến Trúc Kỹ Thuật (Architecture)
+## 🚀 Giới thiệu
+**RSS Reader** là một ứng dụng đọc báo thông minh dành cho Android, được thiết kế để mang lại trải nghiệm tiện lợi nhất cho người dùng – đặc biệt là với tài xế hoặc những người đang bận tay. Thay vì phải chằm chằm duyệt qua hàng chục bài viết dài, ứng dụng sẽ tóm tắt nội dung cốt lõi và đọc nó lên thành tiếng thông qua công nghệ Text-to-Speech rành mạch.
 
-Ứng dụng được xây dựng trên nền tảng **Clean Architecture** và các Design Patterns hiện đại:
+Dự án này là phiên bản đã được **refactor** toàn diện từ kiến trúc, giao diện (Jetpack Compose), đến việc tối ưu hoá luồng xử lý dữ liệu và mạng, bổ sung tính năng tự động chuyển trạng thái chân dung sang cảnh quan màn hình cực kì phù hợp với việc lái xe.
 
-*   **Facade Pattern**: Lớp `ArticleContentFetcher` đóng vai trò trung gian, cung cấp API ổn định cho UI trong khi ẩn đi sự phức tạp bên dưới.
-*   **Strategy Pattern**: Tách biệt logic trích xuất nội dung cho từng website riêng biệt (Extractors), giúp dễ dàng mở rộng thêm các nguồn tin mới.
-*   **MVVM**: Tách biệt hoàn toàn Logic và Giao diện qua Jetpack Compose.
-*   **Foreground Service**: Đảm bảo app luôn sống khỏe khi chạy ngầm, quản lý qua MediaStyle Notification.
+## ✨ Tính năng nổi bật
+*   **📡 Tự động lấy tin (Auto-fetch):** Đọc RSS Feed từ các nguồn phổ biến tại Việt Nam.
+*   **🤖 AI Summarization:** Kết nối với mô hình Ngôn Ngữ tự động gom gọn các bản tin dài thành các bản tóm tắt siêu ngắn gọn, dễ hiểu chỉ trong vài giây.
+*   **🗣 Đọc văn bản (TTS Engine):** Tuỳ chỉnh đọc to tin tức. Hỗ trợ thay đổi giọng và tốc độ – rất an toàn cho người thao tác trên xe.
+*   **🔄 Đọc liên tục (Continuous Reading):** Chỉ cần nhấn giữ nút Play, app sẽ tự động tóm tắt và đọc qua toàn bộ list tin từ trên xuống dưới mà không cần chạm màn hình. Có phản hồi haptic & banner trạng thái xịn sò.
+*   **📱 Nhận diện Giao diện Động (Portrait/Landscape):** Tự động chuyển đổi layout từ dạng thẻ dọc sang chế độ bảng điều khiển cho xe ô tô dạng Card Row ngang vô cùng tối giản. Hẹn giờ, Wifi đều có mặt trong tap.
+*   **⏯ Resumable Audio:** Đang nghe dở bỏ đi? Lần sau mở lại app hiện gợi ý đọc tiếp bản tin đang ngắt quãng.
 
-### Danh mục công nghệ:
-*   **UI**: Jetpack Compose (Modern UI).
-*   **Database**: Room DB (Caching & Persistence).
-*   **Networking**: OkHttp & Kotlin Serialization.
-*   **DI**: Tối ưu hóa thủ công & Clean Repository.
+## 🛠 Tech Stack
+- **Ngôn ngữ:** Kotlin 100%
+- **Giao diện:** Jetpack Compose (Material Design 3)
+- **Kiến trúc:** MVVM (Model-View-ViewModel) kết hợp Uni-directional Data Flow (UDF)
+- **Networking:** Retrofit2 + OkHttp + XML/HTML Parser
+- **Cơ sở dữ liệu:** Room Database (Offline Caching)
+- **Asynchronous/Concurrency:** Kotlin Coroutines & Flow
+- **Background Work:** Đã tích hợp Foreground Services (Service đọc tin nền không bị ngắt) & MediaBrowserServiceCompat (Đồng bộ với nút cứng trên tay lái).
+
+## 🎮 Cách sử dụng
+1. Mở ứng dụng, thêm link nguồn RSS yêu thích (VD: VnExpress, Tuổi Trẻ, Thanh Niên...).
+2. Tại màn hình chính, app tự tải xuống các bản tin mới nhất.
+3. **Đọc 1 bài:** Click thẳng thẻ bài để đọc.
+4. **Đọc tóm tắt:** Nhấn nút đọc (Play), AI sẽ tự tóm tắt và tự phát âm.
+5. **Chế độ đa nhiệm ôtô (Continuous Mode):** Ở bất cứ màn hình nào (Dọc/Ngang), nhấn giữ 2s vào nút "5 Tin", App tự kích hoạt chế độ tự động hoá toàn bộ — phù hợp 100% cho việc vừa lái xe vừa nghe ngóng thế giới.
+
+## 📥 Cài đặt
+* Yêu cầu Android 8.0 (API level 26) trở lên.
+* Tải xuống và cài đặt tập tin APK gốc hoặc clone trực tiếp repo về để compile.
+```bash
+git clone https://github.com/skul9x/RSS-Reader.git
+cd RSS-Reader
+./gradlew assembleDebug
+```
 
 ---
-
-## 🚀 Cài đặt & Sử dụng
-
-1.  **Clone & Open**: Mở project bằng **Android Studio Koala (2024.1.1)** hoặc mới hơn.
-2.  **Config AI**: Truy cập Cài đặt trong App để nhập **Gemini API Key**.
-3.  **Add Feed**: Nhập link RSS của các đầu báo yêu thích.
-4.  **Enjoy**: Click **"Đọc tin"** và tập trung lái xe. 
-
----
-
-## 🔧 Debug & Diagnostics
-Dành cho người dùng chuyên sâu và kỹ thuật viên:
-*   **Real-time Logs**: Theo dõi tín hiệu Media Button và phản hồi API AI ngay trên màn hình Debug.
-*   **Quota Tracker**: Theo dõi mức độ sử dụng Gemini API để quản lý tài nguyên hiệu quả.
-
----
-*Phát triển bởi **Skul9x** - Đưa tin tức lên cabin xe của bạn một cách thông minh và an toàn.*
+*Phát triển bởi [skul9x](https://github.com/skul9x)*
+*Copyright © 2026 Nguyễn Duy Trường*
