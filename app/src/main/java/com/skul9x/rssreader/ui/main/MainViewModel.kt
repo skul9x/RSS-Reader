@@ -124,8 +124,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private var refreshJob: kotlinx.coroutines.Job? = null
     
-    // Track indices of news items read in current session (for Next/Previous buttons)
-    private val readIndicesInSession = mutableSetOf<Int>()
+    // Track IDs of news items read in current session (for Next/Previous buttons)
+    private val readIdsInSession = mutableSetOf<String>()
 
     /**
      * Refresh news - fetch random 5 items from enabled feeds.
@@ -169,7 +169,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (force) {
                     // Reset selection on force refresh
                     _selectedNewsIndex.value = -1
-                    readIndicesInSession.clear()
+                    readIdsInSession.clear()
                     // Reset read history when force refreshing
                     _uiState.value = _uiState.value.copy(hasReadHistory = false)
                 }
@@ -278,21 +278,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val newsItems = _uiState.value.newsItems
         if (newsItems.isEmpty()) return
 
-        val currentIndex = _selectedNewsIndex.value
+        val currentNewsId = newsItems.getOrNull(_selectedNewsIndex.value)?.id
         
         // Exclude both current item and items already read in this session
-        val availableIndices = newsItems.indices.filter { 
-            it != currentIndex && it !in readIndicesInSession 
+        val availableIndices = newsItems.indices.filter { index ->
+            val item = newsItems[index]
+            item.id != currentNewsId && item.id !in readIdsInSession
         }
         
         if (availableIndices.isEmpty()) {
             // All items read - reset read indices and fetch fresh batch
             Log.d(TAG, "All items read in session, fetching new batch...")
-            readIndicesInSession.clear()
+            readIdsInSession.clear()
             refreshNews()
         } else {
             val randomIndex = availableIndices.random()
-            readIndicesInSession.add(randomIndex)
+            readIdsInSession.add(newsItems[randomIndex].id)
             selectNews(randomIndex)
         }
     }

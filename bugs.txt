@@ -1,220 +1,221 @@
-Bugs:
+Dưới đây là phân tích chi tiết về các lỗ hổng logic, kèm theo **giải pháp và code fix cụ thể** cho từng vấn đề trong cơ chế lọc tin đã đọc của hệ thống.
 
-Dựa vào các file mã nguồn bạn cung cấp (`RssRepository.kt`, `MainViewModel.kt`, `ReadNewsDao.kt`, `CachedNewsDao.kt`), logic phân loại và lọc các tin "Đã đọc" (Read News) đang có một số bất hợp lý, thiếu đồng nhất và chưa xử lý triệt để các edge cases. 
+---
 
-Dưới đây là các phát hiện chi tiết, từ lỗi logic nghiệp vụ, hiệu năng cho đến các rủi ro gây crash ứng dụng:
+### Vấn đề 1: Bỏ sót bộ lọc RAM (`memoryPendingReadIds`) khi lấy tin ngẫu nhiên từ Cache
+**Nguyên nhân:**
+Hàm `markNewsAsRead` thêm ID vào `memoryPendingReadIds` để chặn hiển thị lại ngay lập tức. Tuy nhiên, khi hàm `getRandomNewsFromCache()` gọi xuống DB để lấy ID chưa đọc (`getUnreadNewsIdsFromFeedsNoExclude`), nó **quên không loại trừ** các ID đang nằm trong `memoryPendingReadIds` này. Điều này khiến tin vừa đọc xong có thể xuất hiện lại ngay ở lần random tiếp theo.
 
-### 1. Mâu thuẫn logic: "Chỉ lọc tin đọc trong ngày" vs "Lọc toàn bộ lịch sử"
-* **Vấn đề:** Trong phần comment của class `RssRepository` và hàm `fetchRandomNews` có ghi rõ: *"Filter out news items that have been read today"* (Lọc các tin tức đã được đọc **trong ngày hôm nay**). 
-* **Thực tế code:** * Hàm `filterOutReadNews(news)` lại gọi `getAllReadIds()`: lấy **TOÀN BỘ** ID trong bảng `read_news`.
-    * DAO `CachedNewsDao.getUnreadNewsIdsFromFeeds` dùng `LEFT JOIN read_news` cũng loại bỏ tất cả các tin có mặt trong bảng `read_news`.
-* **Hậu quả:** Hệ thống đang lọc các tin đã đọc trong vòng 7 ngày qua (do hàm `cleanupOldReadHistory` giữ lịch sử 7 ngày), chứ không phải 1 ngày. Nếu đây là một app nghe tin tức, người dùng có thể muốn nghe lại các tin quan trọng của ngày hôm trước nhưng sẽ bị app giấu đi hoàn toàn.
+**Cách Fix:** Sửa lại hàm `getRandomNewsFromCache` trong `RssRepository.kt` để lọc qua bộ nhớ RAM trước khi random.
 
-### 2. Nguy cơ Crash SQLite với `NOT IN (Empty List)`
-* **Vấn đề:** Trong `RssRepository.getRandomNewsFromCache()`, bạn khởi tạo một list rỗng và truyền thẳng vào DAO:
-    ```kotlin
-    val excludedInSession = emptyList<String>() 
-    val candidateIds = cachedNewsDao.getUnreadNewsIdsFromFeeds(feedIds, excludedInSession)
-    ```
-* **Thực tế ở DAO:** Câu query gọi `AND cached_news.id NOT IN (:excludedIds)`.
-* **Hậu quả:** Trong SQLite, cú pháp `NOT IN ()` (khi mảng rỗng) là một **cú pháp không hợp lệ (Syntax Error)**. Mặc dù ở một số phiên bản Room mới, thư viện tự động chèn `NOT IN (NULL)` để tránh crash, nhưng điều này dẫn đến behavior khó lường hoặc crash trên các phiên bản Android cũ hơn.
-* **Cách fix:** Bạn cần xử lý động câu query này hoặc có logic check `if (excludedInSession.isEmpty())` để rẽ nhánh gọi một query SQL khác không có mệnh đề `NOT IN`.
-
-### 3. Vấn đề hiệu năng: Đọc toàn bộ DB lên RAM để filter (N+1 Memory Issue)
-* **Vấn đề:** Khi fetch tin tức mới từ Network qua hàm `refreshAndGetRandomNews`, code đang gọi:
-    ```kotlin
-    private suspend fun filterOutReadNews(news: List<NewsItem>): List<NewsItem> {
-        val readIds = getAllReadIds() // Lấy toàn bộ hàng ngàn ID lên RAM
-        // ...
-    }
-    ```
-* **Hậu quả:** Lịch sử đọc của 7 ngày có thể lên tới vài nghìn item. Việc truy vấn toàn bộ dữ liệu này và load lên List/Set trong RAM chỉ để filter khoảng 50 tin mới lấy từ RSS là rất tốn kém (memory footprint cao, kích hoạt Garbage Collector liên tục gây giật lag UI).
-* **Cách fix:** Hãy truyền ngược danh sách ID của tin tức vừa fetch xuống Room DAO để kiểm tra xem ID nào chưa đọc, thay vì kéo toàn bộ lịch sử đọc lên App Level.
-    ```sql
-    -- Ví dụ thêm hàm mới trong DAO
-    @Query("SELECT newsId FROM read_news WHERE newsId IN (:newFetchedIds)")
-    suspend fun getAlreadyReadIdsFrom(newFetchedIds: List<String>): List<String>
-    ```
-
-### 4. Lỗ hổng UI: Chế độ "Đọc Tất Cả" (Read All / Continuous) không lưu lịch sử
-* **Vấn đề:** Trong `MainViewModel`, hàm `selectNews(index)` có gọi `repository.markNewsAsRead(news.id)`. Tuy nhiên, khi người dùng chọn `readAllNewsSummaries()` hoặc `startContinuousReading()`, hệ thống lại giao việc đọc tuần tự cho `NewsReaderService`.
-* **Hậu quả:** Dựa vào code `MainViewModel`, dù ViewModel có observe tiến trình đọc (`serviceState.currentIndex`), nó **KHÔNG HỀ** gọi `markNewsAsRead` cho các tin được đọc tự động. Nếu bản thân bên trong `NewsReaderService` cũng không gọi repository lưu DB, thì người dùng cứ dùng chế độ Continuous là tin tức sẽ **không bao giờ bị tính là đã đọc**. Lần sau mở app, họ sẽ lại nghe y nguyên 5 tin đó.
-
-### 5. Edge Case: Nút Next vòng lặp vô tận vào tin cũ (Tắc nghẽn nội dung)
-* **Vấn đề:** Trong hàm `MainViewModel.selectRandomOtherNews()` (dùng cho nút bấm Next trên vô lăng ô tô):
-    ```kotlin
-    if (availableIndices.isEmpty()) {
-        // All items read - reset and pick from all except current
-        readIndicesInSession.clear()
-        // ... Lại chọn ngẫu nhiên lại từ 5 tin đang hiển thị
-    }
-    ```
-* **Hậu quả:** Giả sử người dùng đang lái xe, họ đã nghe hết 5 tin hiển thị trên màn hình. Khi họ bấm Next, thay vì app tự động gọi `refreshNews()` để load 5 tin MỚI từ DB/Network, code lại đi reset `readIndicesInSession` và **buộc người dùng nghe lại các tin cũ vừa nghe xong**.
-
-### 6. Edge Case: Race Condition giữa "Mark Read" và "Refresh"
-* **Vấn đề:** Khi `selectNews` được gọi, `markNewsAsRead` chạy trên `Dispatchers.IO` (không block UI). 
-* **Hậu quả:** Nếu một user (hoặc automation test) bấm chọn nghe 1 tin, và ngay lập tức thao tác vuốt Pull-to-Refresh (gọi `refreshNews()`), truy vấn lấy tin random mới từ Cache có thể được thực thi **TRƯỚC KHI** lệnh INSERT vào bảng `read_news` hoàn tất. Kết quả là tin vừa được chọn lại xuất hiện ngay trong mẻ 5 tin vừa refresh.
-
-### 7. ID của RSS bị phụ thuộc vào Tracking Parameters
-* **Vấn đề:** Cách filter hiện tại hoàn toàn phụ thuộc vào `it.id` (thường là URL bài báo đối với RSS).
-* **Edge Case:** Một số trang báo (ví dụ VnExpress, GenK) đôi lúc chèn thêm dynamic tracking URL (như `?utm_source=rss`, hoặc ID session). Nếu bài báo được fetch lại vào 3 tiếng sau với cái URL hơi khác một chút, hệ thống sẽ coi đó là một bài báo **Hoàn Toàn Mới** và đem đi đọc lại cho người dùng nghe (dù title và content y hệt).
-* **Cách Fix:** Trong `CachedNewsDao`, bạn đang có nhắc đến `titleHash unique index` ở dạng comment. Việc check "Đã đọc" cũng nên có thêm một lớp phụ fallback kiểm tra theo **Hash của Tiêu đề (Title)** thay vì chỉ cứng nhắc dùng URL/ID.
-
-
-How to fix:
-
-
-Dưới đây là các giải pháp cụ thể kèm theo code để khắc phục các vấn đề đã được phát hiện trong logic lọc tin tức của bạn. Các cách fix này tập trung vào việc tối ưu hiệu năng (Performance), sửa lỗi logic (Business Logic) và tránh crash (Stability).
-
-### 1. Fix lỗi Memory (N+1) & Sai logic thời gian đọc
-Thay vì kéo toàn bộ hàng nghìn ID trong lịch sử lên RAM, chúng ta sẽ đẩy việc kiểm tra xuống Database. Đồng thời, làm rõ logic "chỉ lọc tin đọc trong ngày" hay "lọc toàn bộ".
-
-**Trong `ReadNewsDao.kt`:** Thêm hàm kiểm tra xem trong danh sách các ID mới fetch, ID nào đã bị đọc.
 ```kotlin
-// Nếu muốn lọc TOÀN BỘ lịch sử:
-@Query("SELECT newsId FROM read_news WHERE newsId IN (:newsIds)")
-suspend fun getAlreadyReadIds(newsIds: List<String>): List<String>
+// Trong RssRepository.kt
+suspend fun getRandomNewsFromCache(count: Int = 5): List<NewsItem> = withContext(Dispatchers.IO) {
+    val enabledFeeds = rssFeedDao.getEnabledFeedsList()
+    if (enabledFeeds.isEmpty()) return@withContext emptyList()
 
-// (Tuỳ chọn) Nếu ĐÚNG LÀ CHỈ MUỐN lọc tin đã đọc TRONG NGÀY:
-@Query("SELECT newsId FROM read_news WHERE newsId IN (:newsIds) AND readAt >= :todayStart")
-suspend fun getTodayReadIdsFromList(newsIds: List<String>, todayStart: Long): List<String>
+    val feedIds = enabledFeeds.map { it.id }
+    val excludedInSession = emptyList<String>() 
+    
+    // 1. Get ALL candidates IDs
+    val candidateIds = if (excludedInSession.isEmpty()) {
+        cachedNewsDao.getUnreadNewsIdsFromFeedsNoExclude(feedIds)
+    } else {
+        cachedNewsDao.getUnreadNewsIdsFromFeeds(feedIds, excludedInSession)
+    }
+    
+    // [FIX CODE] Lọc bỏ các ID vừa đọc đang lưu tạm trên RAM
+    val unreadCandidates = candidateIds.filter { it !in memoryPendingReadIds }
+
+    if (unreadCandidates.isEmpty()) {
+        DebugLogger.log("READ", "getRandomNewsFromCache: No unread candidates")
+        return@withContext emptyList()
+    }
+
+    // 2. Shuffle in Memory 
+    val selectedIds = unreadCandidates.shuffled().take(count)
+    DebugLogger.log("READ", "getRandomNewsFromCache: Pool=${unreadCandidates.size}, Picking=${selectedIds.size}")
+    
+    // 3. Fetch full items
+    val cached = cachedNewsDao.getNewsByIds(selectedIds)
+    return@withContext cached.map { it.toNewsItem() }
+}
 ```
 
-**Trong `RssRepository.kt`:** Cập nhật lại hàm `filterOutReadNews`:
+---
+
+### Vấn đề 2: Nguy cơ Crash ứng dụng do giới hạn biến SQLite (SQLite Variable Limit)
+**Nguyên nhân:**
+Khi tải tin từ mạng về (có thể lên tới hàng ngàn tin), hàm `filterOutReadNews` truyền toàn bộ danh sách ID vào truy vấn `IN (:newsIds)` của SQLite. Mặc định SQLite giới hạn tối đa 999 biến trong một câu lệnh, nếu vượt qua sẽ văng lỗi `SQLiteException: too many SQL variables` và gây crash app.
+
+**Cách Fix:**
+Cắt nhỏ (chunk) danh sách ID thành các mảng nhỏ (ví dụ: 900 phần tử) để truy vấn an toàn.
+
 ```kotlin
+// Trong RssRepository.kt
 private suspend fun filterOutReadNews(news: List<NewsItem>): List<NewsItem> {
     if (news.isEmpty()) return news
-    
     val candidateIds = news.map { it.id }
-    // Fetch DB để lấy những ID đã đọc từ danh sách candidate
-    val readIds = readNewsDao.getAlreadyReadIds(candidateIds).toSet() 
     
-    if (readIds.isEmpty()) return news
-    return news.filter { it.id !in readIds }
-}
-```
-
-### 2. Fix nguy cơ Crash SQLite `NOT IN (Empty List)`
-Tránh truyền list rỗng vào câu lệnh `NOT IN` của Room.
-
-**Trong `CachedNewsDao.kt`:** Viết thêm 1 câu Query không có mệnh đề `NOT IN`.
-```kotlin
-@Query("""
-    SELECT cached_news.id FROM cached_news 
-    LEFT JOIN read_news ON cached_news.id = read_news.newsId 
-    WHERE cached_news.feedId IN (:feedIds) 
-    AND read_news.newsId IS NULL
-""")
-suspend fun getUnreadNewsIdsFromFeedsNoExclude(feedIds: List<Long>): List<String>
-```
-
-**Trong `RssRepository.kt` (hàm `getRandomNewsFromCache`):** Rẽ nhánh logic:
-```kotlin
-val excludedInSession = emptyList<String>() // Hoặc nhận từ tham số
-
-val candidateIds = if (excludedInSession.isEmpty()) {
-    cachedNewsDao.getUnreadNewsIdsFromFeedsNoExclude(feedIds)
-} else {
-    cachedNewsDao.getUnreadNewsIdsFromFeeds(feedIds, excludedInSession)
-}
-```
-
-### 3. Fix chế độ Continuous / Read All không lưu lịch sử
-Vì `MainViewModel` đang lắng nghe `serviceState.currentIndex`, bạn có thể tận dụng StateFlow này để đánh dấu tin là "Đã đọc" ngay khi Service chuyển sang đọc tin đó.
-
-**Trong `MainViewModel.kt` (hàm `observeServiceState`):** Thêm một biến lưu cục bộ để tránh gọi DB nhiều lần cho cùng 1 ID.
-```kotlin
-private val markedReadInService = mutableSetOf<String>()
-
-private fun observeServiceState() {
-    viewModelScope.launch {
-        com.skul9x.rssreader.service.NewsReaderService.serviceState.collect { serviceState ->
-            // ... (Code update UI cũ của bạn) ...
-
-            if (serviceState.currentIndex >= 0) {
-                // Xác định tin đang được đọc
-                val currentList = serviceState.continuousNewsItems ?: _uiState.value.newsItems
-                val currentNews = currentList.getOrNull(serviceState.currentIndex)
-
-                // Đánh dấu đã đọc tự động
-                if (currentNews != null && currentNews.id !in markedReadInService) {
-                    markedReadInService.add(currentNews.id)
-                    // Gọi repository chạy ngầm
-                    launch(Dispatchers.IO) { 
-                        repository.markNewsAsRead(currentNews.id) 
-                    }
-                }
-                
-                _selectedNewsIndex.value = serviceState.currentIndex
-            }
-        }
-    }
-}
-```
-
-### 4. Fix kẹt vòng lặp tin cũ khi bấm Next (Media Button)
-Khi người dùng bấm Next và đã duyệt hết danh sách `availableIndices`, thay vì bắt họ nghe lại tin cũ, hãy tự động kích hoạt tải 5 tin mới.
-
-**Trong `MainViewModel.kt` (hàm `selectRandomOtherNews`):**
-```kotlin
-fun selectRandomOtherNews() {
-    // ... (logic debounce giữ nguyên) ...
-
-    val availableIndices = newsItems.indices.filter { 
-        it != currentIndex && it !in readIndicesInSession 
+    // [FIX CODE] Chunk danh sách ID để tránh giới hạn 999 biến của SQLite
+    val readIds = mutableSetOf<String>()
+    candidateIds.chunked(900).forEach { chunk ->
+        readIds.addAll(readNewsDao.getAlreadyReadIds(chunk))
     }
     
-    if (availableIndices.isEmpty()) {
-        // Đã nghe hết tin trong batch hiện tại -> Làm mới danh sách!
-        Log.d(TAG, "All items read, fetching new batch...")
-        readIndicesInSession.clear()
-        refreshNews() // Load 5 tin mới tinh
-    } else {
-        val randomIndex = availableIndices.random()
-        readIndicesInSession.add(randomIndex)
-        selectNews(randomIndex)
-    }
-}
-```
-
-### 5. Fix Race Condition (Mark Read vs Refresh)
-Đảm bảo khi bấm thao tác "Refresh", các tin *vừa mới được đưa vào hàng đợi đánh dấu đọc* sẽ bị loại bỏ ngay trong bộ nhớ, kể cả khi Room DB chưa kịp commit.
-
-**Trong `RssRepository.kt`:** Thêm một `MutableSet` in-memory để theo dõi các ID vừa bị mark read.
-```kotlin
-private val memoryPendingReadIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
-
-suspend fun markNewsAsRead(newsId: String) = withContext(Dispatchers.IO) {
-    memoryPendingReadIds.add(newsId) // Cache nhanh trên RAM
-    localSyncRepository?.markAsRead(newsId) ?: run {
-        readNewsDao.markAsRead(ReadNewsItem(newsId = newsId))
-    }
-}
-
-// Trong hàm filterOutReadNews, kết hợp với RAM:
-private suspend fun filterOutReadNews(news: List<NewsItem>): List<NewsItem> {
-    // ... DB filter code ở Fix 1 ...
+    if (readIds.isEmpty() && memoryPendingReadIds.isEmpty()) return news
     
-    // Kết hợp filter những ID vừa thêm vào bộ nhớ (chưa kịp lưu DB)
     return news.filter { it.id !in readIds && it.id !in memoryPendingReadIds }
 }
 ```
 
-### 6. Fix rác ID do Tracking Parameters (`?utm_source`)
-Để tránh 1 bài báo bị trùng lặp vì link bị chèn thêm tham số tracking, bạn nên chuẩn hoá (Normalize) URL ID ngay tại tầng Parser trước khi lưu xuống DB hoặc xử lý logic.
+---
 
-**Tạo một hàm extension (ví dụ ở `Utils` hoặc `RssParser`):**
+### Vấn đề 3: UI bị lỗi Logic do quản lý trạng thái bằng Index thay vì ID
+**Nguyên nhân:**
+Trong `MainViewModel`, biến `readIndicesInSession` (chứa Index) được dùng để đánh dấu bài đã qua khi bấm Next/Prev. Tuy nhiên, nếu danh sách `_uiState.value.newsItems` bị làm mới (auto-refresh ngầm) thì các Index này không còn đúng nữa (Index 0 của list cũ khác Index 0 của list mới). Điều này dẫn tới lỗi bỏ qua tin chưa đọc hoặc lặp vô tận.
+
+**Cách Fix:**
+Thay thế việc lưu `Index` bằng việc lưu `ID` của bài báo trong `MainViewModel.kt`.
+
 ```kotlin
-fun String.normalizeNewsId(): String {
-    // Cắt bỏ tất cả các params tracking phổ biến từ URL
-    return this.substringBefore("?utm_")
-               .substringBefore("&utm_")
-               .substringBefore("?fbclid=")
-               .substringBefore("?session=")
-               // Có thể cắt thêm theo đặc thù của VnExpress/GenK
+// Trong MainViewModel.kt
+// [FIX CODE] Thay Set<Int> thành Set<String> để lưu theo ID thay vì Index
+private val readIdsInSession = mutableSetOf<String>()
+
+fun selectRandomOtherNews() {
+    val now = System.currentTimeMillis()
+    if (now - lastSelectTime < DEBOUNCE_MS) return
+    lastSelectTime = now
+
+    val newsItems = _uiState.value.newsItems
+    if (newsItems.isEmpty()) return
+
+    val currentSelectedNewsId = _uiState.value.newsItems.getOrNull(_selectedNewsIndex.value)?.id
+    
+    // [FIX CODE] Lọc ra các Index của bài báo có ID chưa nằm trong danh sách đã đọc của phiên
+    val availableIndices = newsItems.indices.filter { index ->
+        val item = newsItems[index]
+        item.id != currentSelectedNewsId && item.id !in readIdsInSession
+    }
+    
+    if (availableIndices.isEmpty()) {
+        Log.d(TAG, "All items read in session, fetching new batch...")
+        readIdsInSession.clear()
+        refreshNews()
+    } else {
+        val randomIndex = availableIndices.random()
+        val nextNewsItem = newsItems[randomIndex]
+        readIdsInSession.add(nextNewsItem.id) // Lưu ID thay vì index
+        selectNews(randomIndex)
+    }
+}
+
+fun refreshNews(force: Boolean = false) {
+    // ... code giữ nguyên ...
+    if (force) {
+        _selectedNewsIndex.value = -1
+        readIdsInSession.clear() // Xóa cache ID của session
+        _uiState.value = _uiState.value.copy(hasReadHistory = false)
+    }
+    // ...
 }
 ```
-Sau đó áp dụng khi khởi tạo `NewsItem` từ Network:
+
+---
+
+### Vấn đề 4: Sai lệch nghiệp vụ giữa Comment và Logic DB ("Hôm nay" vs "Mãi mãi")
+**Nguyên nhân:**
+Document code ghi `Filter out news items that have been read today` (Chỉ lọc tin đã đọc hôm nay). Nhưng truy vấn `@Query("SELECT newsId FROM read_news WHERE newsId IN (:newsIds)")` không hề kiểm tra thời gian. Do App giữ lịch sử 7 ngày, nên thực tế app đang cấm hiển thị lại các tin đã đọc trong vòng 7 ngày qua.
+
+**Cách Fix:**
+Cập nhật SQL Query trong `ReadNewsDao` và truyền thêm `todayStart` từ Repository.
+
 ```kotlin
-val id = rawId.normalizeNewsId() 
+// 1. Sửa trong ReadNewsDao.kt
+@Query("SELECT newsId FROM read_news WHERE newsId IN (:newsIds) AND readAt >= :todayStart")
+suspend fun getAlreadyReadIds(newsIds: List<String>, todayStart: Long): List<String>
+
+// 2. Cập nhật lại lời gọi hàm trong RssRepository.kt (hàm filterOutReadNews)
+private suspend fun filterOutReadNews(news: List<NewsItem>): List<NewsItem> {
+    if (news.isEmpty()) return news
+    val candidateIds = news.map { it.id }
+    
+    val todayStart = getTodayStartTimestamp() // Lấy mốc 0h hôm nay
+    
+    val readIds = mutableSetOf<String>()
+    candidateIds.chunked(900).forEach { chunk ->
+        // [FIX CODE] Truyền thêm tham số todayStart vào Dao
+        readIds.addAll(readNewsDao.getAlreadyReadIds(chunk, todayStart))
+    }
+    
+    if (readIds.isEmpty() && memoryPendingReadIds.isEmpty()) return news
+    return news.filter { it.id !in readIds && it.id !in memoryPendingReadIds }
+}
+```
+
+---
+
+### Vấn đề 5: Rò rỉ bộ nhớ (Memory Leak) với các `Set` RAM In-Memory
+**Nguyên nhân:**
+Hai tập hợp `memoryPendingReadIds` (trong RssRepository) và `markedReadInService` (trong MainViewModel) chỉ có thao tác thêm `.add()` mà không bao giờ bị xóa. Nếu người dùng mở app đọc tin liên tục nhiều ngày, RAM sẽ cạn kiệt dần.
+
+**Cách Fix:**
+Làm sạch các cấu trúc dữ liệu này khi người dùng chủ động làm mới ứng dụng (Force Refresh) hoặc định kỳ dọn dẹp.
+
+```kotlin
+// 1. Trong MainViewModel.kt - Cập nhật hàm refreshNews:
+if (force) {
+    _selectedNewsIndex.value = -1
+    readIdsInSession.clear()
+    markedReadInService.clear() // [FIX CODE] Dọn dẹp RAM rác Service
+    _uiState.value = _uiState.value.copy(hasReadHistory = false)
+}
+
+// 2. Trong RssRepository.kt - Thêm hàm dọn dẹp RAM và gọi nó khi dọn dẹp DB
+suspend fun cleanupOldReadHistory() = withContext(Dispatchers.IO) {
+    val retentionDays = com.skul9x.rssreader.utils.AppConfig.READ_HISTORY_RETENTION_DAYS
+    val cutoffTime = System.currentTimeMillis() - (retentionDays * 24 * 60 * 60 * 1000L)
+    readNewsDao.deleteOlderThan(cutoffTime)
+    
+    // [FIX CODE] Xóa bớt bộ nhớ tạm trên RAM (để an toàn, ta clear hẳn hoặc xóa các ID đã vào DB)
+    memoryPendingReadIds.clear() 
+}
+```
+
+---
+
+### Vấn đề 6: Race Condition khi Service đẩy sự kiện (Đồng bộ Coroutine)
+**Nguyên nhân:**
+Trong `observeServiceState()`, khi Service báo đang đọc Index mới, ViewModel sẽ lưu xuống DB bằng `launch(Dispatchers.IO)`. Do `Dispatchers.IO` chạy đa luồng đồng thời, nếu nhảy bài nhanh (Next/Prev spam), các lệnh ghi DB có thể thực thi lộn xộn, sai thứ tự thời gian, gây lỗi lịch sử đồng bộ Firebase.
+
+**Cách Fix:**
+Sử dụng một dispatcher tuần tự (`limitedParallelism(1)`) chuyên dùng cho việc ghi log/history để đảm bảo lệnh nào gọi trước sẽ được ghi DB trước.
+
+```kotlin
+// Trong MainViewModel.kt
+// [FIX CODE] Tạo một dispatcher đơn luồng để chuyên xử lý việc ghi lịch sử tránh xung đột
+private val historyWriteDispatcher = Dispatchers.IO.limitedParallelism(1)
+
+private fun observeServiceState() {
+    viewModelScope.launch {
+        com.skul9x.rssreader.service.NewsReaderService.serviceState.collect { serviceState ->
+            // ... code cập nhật UI ...
+            
+            if (serviceState.currentIndex >= 0) {
+                _selectedNewsIndex.value = serviceState.currentIndex
+                val currentList = serviceState.continuousNewsItems ?: _uiState.value.newsItems
+                val currentNews = currentList.getOrNull(serviceState.currentIndex)
+                
+                if (currentNews != null && currentNews.id !in markedReadInService) {
+                    markedReadInService.add(currentNews.id)
+                    // [FIX CODE] Dùng historyWriteDispatcher để đảm bảo ghi tuần tự 1-1
+                    launch(historyWriteDispatcher) {
+                        repository.markNewsAsRead(currentNews.id)
+                    }
+                }
+            }
+        }
+    }
+}
 ```

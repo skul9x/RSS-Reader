@@ -84,8 +84,11 @@ class RssRepository(
     private suspend fun filterOutReadNews(news: List<NewsItem>): List<NewsItem> {
         if (news.isEmpty()) return news
         val candidateIds = news.map { it.id }
-        // Fetch DB để lấy những ID đã đọc từ danh sách candidate
-        val readIds = readNewsDao.getAlreadyReadIds(candidateIds).toSet()
+        // Fetch DB để lấy những ID đã đọc từ danh sách candidate (chunk để tránh giới hạn 999 biến của SQLite)
+        val readIds = mutableSetOf<String>()
+        candidateIds.chunked(900).forEach { chunk ->
+            readIds.addAll(readNewsDao.getAlreadyReadIds(chunk))
+        }
         if (readIds.isEmpty() && memoryPendingReadIds.isEmpty()) return news
         return news.filter { it.id !in readIds && it.id !in memoryPendingReadIds }
     }
@@ -172,14 +175,17 @@ class RssRepository(
             cachedNewsDao.getUnreadNewsIdsFromFeeds(feedIds, excludedInSession)
         }
         
-        if (candidateIds.isEmpty()) {
+        // Optimize: Filter out IDs stored in RAM that haven't been committed to DB yet
+        val filteredCandidates = candidateIds.filter { it !in memoryPendingReadIds }
+        
+        if (filteredCandidates.isEmpty()) {
             DebugLogger.log("READ", "getRandomNewsFromCache: No unread candidates")
             return@withContext emptyList()
         }
 
         // 2. Shuffle in Memory (fast for < 100k items)
-        val selectedIds = candidateIds.shuffled().take(count)
-        DebugLogger.log("READ", "getRandomNewsFromCache: Pool=${candidateIds.size}, Picking=${selectedIds.size}")
+        val selectedIds = filteredCandidates.shuffled().take(count)
+        DebugLogger.log("READ", "getRandomNewsFromCache: Pool=${filteredCandidates.size}, Picking=${selectedIds.size}")
         
         // 3. Fetch full items by ID (fast primary key lookup)
         val cached = cachedNewsDao.getNewsByIds(selectedIds)

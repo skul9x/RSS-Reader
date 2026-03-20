@@ -37,6 +37,7 @@ class RssRepositoryTest {
         // Mock ID return
         val mockIds = listOf("1", "2", "3", "4", "5")
         coEvery { cachedNewsDao.getUnreadNewsIdsFromFeeds(any(), any()) } returns mockIds
+        coEvery { cachedNewsDao.getUnreadNewsIdsFromFeedsNoExclude(any()) } returns mockIds
 
         // Mock Item return (simulation of returning items for shuffled IDs)
         val mockItems = mockIds.map { 
@@ -64,7 +65,7 @@ class RssRepositoryTest {
 
         // Assert
         // 1. Verify getUnreadNewsIdsFromFeeds is called (Step 1 of opt)
-        coVerify { cachedNewsDao.getUnreadNewsIdsFromFeeds(any(), any()) }
+        coVerify { cachedNewsDao.getUnreadNewsIdsFromFeedsNoExclude(any()) }
         
         // 2. Verify getNewsByIds is called (Step 3 of opt)
         coVerify { cachedNewsDao.getNewsByIds(any()) }
