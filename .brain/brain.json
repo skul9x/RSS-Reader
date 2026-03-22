@@ -1,0 +1,46 @@
+{
+  "meta": { "schema_version": "1.1.0", "awf_version": "3.3.0" },
+  "project": { "name": "RSS Reader", "type": "Android App", "status": "In Progress - Architecture Refactor Phase 3" },
+  "tech_stack": { "frontend": {"framework": "Jetpack Compose (Material 3)"}, "backend": {"local": "Room", "sync": "Firebase"}, "database": {"type": "SQLite via Room"} },
+  "database_schema": { 
+    "summary": "Quản lý RSS feeds, tin tức đã cache và lịch sử đọc",
+    "tables": ["cached_news", "read_news", "rss_feed"], 
+    "relationships_explained": "Một feed (rss_feed) chứa nhiều tin tự động cache (cached_news). Trạng thái đọc của tin được lưu ở (read_news)."
+  },
+  "api_endpoints": [],
+  "business_rules": [
+    "Lịch sử đọc giữ trong 7 ngày",
+    "URL Normalization: Loại bỏ tracking params (utm_, fbclid) để tránh trùng lặp tin",
+    "Continuous mode đọc liên tục các tin lấy tự động (sắp hỗ trợ landscape mode)",
+    "Extraction Strategy: Try Regex first for performance, Jsoup as fallback"
+  ],
+  "features": [
+    "Đọc tin tức offline",
+    "Summarization qua Gemini",
+    "Continuous reading",
+    "Firebase Sync (read read_news status)",
+    "Media Button support with auto-refresh batching",
+    "High-Performance Content Extractors (Phase 2)"
+  ],
+  "knowledge_items": { 
+    "patterns": [
+      "Repository pattern with background sync", 
+      "Jetpack Compose for UI", 
+      "Concurrent memory cache for read IDs (防止 Race Condition)"
+    ], 
+    "gotchas": [
+      "Room limitations with empty collections in IN clause (causes Crash) - Use NoExclude query variant", 
+      "N+1 query issues - Use DB-side ID filtering instead of loading all to RAM",
+      "Jsoup charset corruption when passing String - Always pass InputStream/ByteArray for auto-detection",
+      "Voz.vn large DOM CPU spikes - Use Regex to detect redirects before Parsing",
+      "Memory leak via doc.clone(): Jsoup cloning duplicates large DOMs. Clean HTML as strings instead."
+    ], 
+    "conventions": [
+      "Use Flow for observing DB changes", 
+      "Use suspend functions for DAO queries",
+      "Always normalize RSS URLs before processing",
+      "Avoid doc.clone() in Jsoup - Use string-based cleaning for memory efficiency",
+      "Prefer Regex extraction over Jsoup when possible for speed"
+    ] 
+  }
+}

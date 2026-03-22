@@ -1,0 +1,85 @@
+Về mặt kiến trúc tổng thể, luồng logic (flow) này **rất hợp lý và chuẩn mực** cho một hệ thống cào dữ liệu (web scraping). Nó tuân theo nguyên tắc **"Graceful Degradation"** (xuống cấp từ từ) và cân bằng tốt giữa **Hiệu suất (Performance)** và **Độ chính xác (Accuracy)**.
+
+Tuy nhiên, đi sâu vào chi tiết code hiện tại, có một số **lỗ hổng (bug) và điểm chưa tối ưu** mà bạn cần lưu ý. Dưới đây là phân tích cụ thể:
+
+### 👍 1. Điểm mạnh (Rất hợp lý)
+* **Chiến lược Regex -> Jsoup:** Việc thử Regex trước Jsoup đối với các site cụ thể (Site-Specific) là một nước đi rất thông minh. Jsoup build cây DOM cực kỳ tốn CPU và Memory. Regex lấy chuỗi nhanh hơn gấp nhiều lần. Nếu Regex xịt, mới gọi Jsoup ra để "chữa cháy".
+* **Custom Selector ưu tiên cao nhất:** Cấp quyền cho user ghi đè logic bằng Custom Selector giúp app sống sót tốt khi các trang báo thay đổi giao diện mà app chưa kịp cập nhật code.
+* **Dự phòng nhiều lớp:** Cấu trúc Specific -> Generic đảm bảo tỷ lệ lấy được bài viết là cao nhất.
+
+---
+
+### ⚠️ 2. Lỗ hổng & Điểm bất hợp lý (Cần khắc phục)
+
+**❌ Lỗi chí mạng ở bước Custom Selector (Chưa có `return`)**
+Trong file `ContentExtractorRegistry.kt`, đoạn code xử lý Custom Selector hiện tại đang như sau:
+```kotlin
+val customSelector = customSelectorManager?.getSelectorForUrl(url)
+if (customSelector != null) {
+    try {
+        // TODO: Implement custom selector logic properly if needed.
+    } catch (e: Exception) {
+        logger.logError(TAG, "Custom selector extraction failed: $customSelector", e)
+    }
+}
+// NGHIÊM TRỌNG: Code tiếp tục chạy xuống dưới ở đây!
+val extractor = extractors.find { it.supports(url) }
+...
+```
+* **Vấn đề:** Ngay cả khi bạn viết xong phần `TODO` và bóc tách thành công nội dung, code **không hề có lệnh `return`**. Nó sẽ tiếp tục chạy xuống luồng Specific Extractor / Generic Extractor và **ghi đè** mất kết quả của Custom Selector.
+* **Cách sửa:** Cần phải `return` kết quả nếu Custom Selector chạy thành công.
+
+**🤔 Vị trí của Generic Extractor (Regex) ở bước cuối cùng hơi khiên cưỡng**
+* **Vấn đề:** Theo logic của bạn, luồng dự phòng cuối cùng là `Generic Extractor (Jsoup)` -> thất bại -> chuyển sang `Generic Extractor (Regex)`. 
+* **Phân tích:** Regex rất nhạy cảm với HTML bị lỗi (malformed HTML). Trình parse DOM của Jsoup sinh ra là để xử lý các mã HTML rối rắm và chuẩn hóa chúng. Nếu Jsoup (thứ mạnh nhất) quét qua các thẻ `<article>`, `div` mà đã bó tay (không tìm thấy text nào ra hồn), thì việc dùng Regex quét chuỗi `<p>` làm cứu cánh cuối cùng tỷ lệ thành công là vô cùng thấp, hầu như chỉ gây tốn thêm CPU một cách vô ích.
+* **Đề xuất:** Nên đưa Regex của Generic lên trước Jsoup (giữ đúng triết lý Regex làm fast-path như ở Site-Specific), HOẶC chỉ dùng Jsoup cho Generic làm "chốt chặn cuối cùng" là đủ.
+
+---
+
+### 🛠️ Đề xuất cấu trúc lại hàm `extractContent`
+Để flow này thực sự hoàn hảo và không bị bug, bạn nên sửa lại hàm `extractContent` theo logic sau:
+
+```kotlin
+fun extractContent(doc: Document, html: String, url: String): String? {
+    // 1. User Defined (Ưu tiên tuyệt đối)
+    val customSelector = customSelectorManager?.getSelectorForUrl(url)
+    if (customSelector != null) {
+        try {
+            // Implement Jsoup selection here
+            val workingDoc = doc.clone()
+            workingDoc.select("script, style, iframe, .ads").remove() // Clean rác cơ bản
+            val result = workingDoc.select(customSelector).html() // hoặc .text()
+            val cleanedResult = htmlCleaner.clean(result)
+            
+            if (cleanedResult.length > 50) {
+                return cleanedResult // CHÚ Ý: Phải return ở đây!
+            }
+        } catch (e: Exception) {
+            logger.logError(TAG, "Custom selector extraction failed: $customSelector", e)
+            // Nếu lỗi, âm thầm rớt xuống (fallback) các bước dưới
+        }
+    }
+
+    // 2. Specific Extractors
+    val extractor = extractors.find { it.supports(url) }
+    if (extractor != null) {
+        if (extractor.preferRegex) {
+            val regexResult = extractor.extractByRegex(html)
+            if (regexResult != null && regexResult.length > 200) return regexResult // Return sớm
+        }
+        
+        val jsoupResult = extractor.extractByJsoup(doc, url)
+        if (jsoupResult != null && jsoupResult.length > 200) return jsoupResult // Return sớm
+    }
+
+    // 3. Generic Extractor Fallbacks
+    // Nên thử Regex của Generic trước cho nhẹ nhàng (nếu bạn vẫn muốn xài regex)
+    val genericRegex = genericExtractor.extractByRegex(html)
+    if (genericRegex != null && genericRegex.length > 200) return genericRegex
+
+    // 4. "The Last Stand" - Generic Jsoup quét toàn bộ DOM
+    return genericExtractor.extractByJsoup(doc, url)
+}
+```
+
+**Tóm lại:** Luồng tư duy của bạn thì **rất chuẩn**, nhưng bản implement hiện tại trong file Kotlin đang bị thiếu case `return` ở bước Custom Selector, và thứ tự fallback của Generic có thể điều chỉnh lại một chút cho tối ưu hiệu năng hơn.

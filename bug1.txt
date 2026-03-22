@@ -1,0 +1,38 @@
+Nhìn sâu vào toàn bộ vòng đời (flow) từ lúc `HtmlFetcher` gọi mạng cho đến lúc `ArticleContentFetcher` và `GenericExtractor` nhả ra kết quả, hệ thống này được thiết kế với tư duy khá tốt. Tuy nhiên, nó đang dính phải **một số lỗi logic và rủi ro kiến trúc khá nghiêm trọng**, đặc biệt là trong bối cảnh làm app đọc báo (cần xử lý nhiều loại website lộn xộn).
+
+Dưới đây là các "lỗ hổng" lớn nhất trong luồng xử lý hiện tại của bạn:
+
+### 🚨 1. Lỗi chí mạng về Font chữ (Charset Encoding)
+**Nơi xảy ra:** `HtmlFetcher.kt` và `ArticleContentFetcher.kt`
+* **Vấn đề:** Trong `HtmlFetcher`, bạn dùng `resp.body?.string()` để lấy toàn bộ HTML dưới dạng chuỗi `String`. OkHttp mặc định sẽ ép nội dung này thành `UTF-8` nếu server không khai báo rõ trong HTTP Header. Sau đó, bạn ném cục `String` này cho `Jsoup.parse(html, url)`.
+* **Hậu quả:** Bạn đã **tước đoạt mất siêu năng lực tự nhận diện bảng mã (charset)** của Jsoup. Rất nhiều trang web/báo cũ ở Việt Nam không khai báo charset ở HTTP Header mà khai báo trong thẻ `<meta charset="windows-1258">` hoặc `utf8` (không có dấu gạch ngang). Do bạn đã ép nó thành String UTF-8 từ trước, khi Jsoup đọc, nó sẽ không thể sửa lại được nữa -> **Kết quả là bài báo sẽ bị lỗi font (hiển thị ký tự lạ ).**
+* **Cách sửa:** Đừng đọc `resp.body?.string()`. Hãy truyền trực tiếp `InputStream` của OkHttp cho Jsoup: `Jsoup.parse(resp.body!!.byteStream(), null, url)`. Tham số `null` ở giữa bảo Jsoup: *"Hãy tự đọc thẻ meta trong HTML mà quyết định bảng mã nhé!"*.
+
+### 💥 2. Quả bom nổ chậm về Bộ nhớ (Tràn RAM / OOM)
+**Nơi xảy ra:** Xuyên suốt quá trình Parse.
+* **Vấn đề:** Flow của bạn giữ quá nhiều phiên bản của một bài báo trên RAM. 
+  1. Giữ chuỗi `html` gốc (rất nặng).
+  2. Parse ra cây DOM `doc` (Jsoup objects chiếm RAM gấp 3-4 lần text gốc).
+  3. Băng qua `GenericExtractor`, bạn lại gọi `val workingDoc = doc.clone()` (Nhân đôi cây DOM thêm lần nữa).
+* **Hậu quả:** Tưởng tượng user bấm mở một bài báo dài nhiều comment hoặc có chứa đống data Base64. RAM của máy cấp thấp sẽ ngay lập tức phình to và bị Android chém (Crash OutOfMemory).
+* **Cách sửa:** Bỏ hẳn lệnh `doc.clone()`. Hãy dùng Jsoup để query và lấy chuỗi text/html cục bộ, sau đó dùng `HtmlCleaner` để làm sạch cái chuỗi đó thay vì clone cả cây DOM rồi gọi lệnh `.remove()` lên các node.
+
+### 🙈 3. Generic Extractor bị "Mù" thẻ HTML
+**Nơi xảy ra:** `GenericExtractor.kt` -> hàm `extractByJsoup`
+* **Vấn đề:** Khi quét được khối chứa bài viết (vd: `article`, `.post-content`), bạn bóc tách bằng lệnh: `val text = element.select("p").eachText().joinToString("\n\n")`.
+* **Hậu quả:** Bạn **chỉ** lấy nội dung nằm trong thẻ `<p>`. Rất nhiều hệ thống CMS hiện tại cấu trúc bài viết bằng `<div>text<br><br>text</div>`, hoặc bài viết chứa danh sách (`<ul> <li>`), hoặc thẻ in đậm (`<b>text</b>`) nằm lẻ loi. Dùng lệnh kia sẽ làm bạn **mất sạch** các nội dung không nằm trong thẻ `p`, dẫn đến bài báo bị đứt đoạn, thiếu chữ, hoặc thậm chí rỗng không.
+* **Cách sửa:** Thay vì `select("p").eachText()`, hãy lấy toàn bộ HTML của `element` đó (`element.html()`), sau đó ném qua `HtmlCleaner` để nó tự chuẩn hóa thẻ `<br>`, `<div>` thành dấu xuống dòng hợp lý.
+
+### 🚧 4. Hardcode cực đoan trong logic Anti-Bot
+**Nơi xảy ra:** `ArticleContentFetcher.kt` -> hàm `fetchArticleWithTitle`
+* **Vấn đề:** Điều kiện kích hoạt chạy lại (bypass anti-bot) là: `html.length < 500 && HtmlFetcher.RELOAD_PATTERN.containsMatchIn(html)`.
+* **Hậu quả:** Tại sao lại là `< 500`? Các trang chặn bot (ví dụ Sucuri, Cloudflare turnstile) thường nhúng một đoạn Javascript obfuscate (làm rối mã) rất dài để check trình duyệt. Trang anti-bot hoàn toàn có thể dài 600 bytes, 1500 bytes. Việc ghim cứng con số 500 bytes sẽ khiến app bó tay trước các trang chặn bot thế hệ mới vì nó bị lọt lưới điều kiện này.
+* **Cách sửa:** Nên nới lỏng hoặc bỏ luôn check `< 500`. Chỉ cần check thấy Regex Set-Cookie đặc thù của Bot-protection + lệnh Reload là đủ cơ sở để retry.
+
+### 🚦 5. Sai lầm về thứ tự thực thi gây lãng phí CPU (Voz Redirect)
+**Nơi xảy ra:** `ArticleContentFetcher.kt` -> hàm `fetchArticleWithTitle`
+* **Vấn đề:** Hệ thống kiểm tra AI-Hay Redirect *trước* khi parse Jsoup (rất tốt vì check qua text Regex nhanh). NHƯNG, nó lại kiểm tra Voz Redirect *sau* khi đã gọi `Jsoup.parse(html, url)`. Voz là một forum, cây DOM của nó cực kỳ khổng lồ. 
+* **Hậu quả:** App hì hục cày 100% CPU để dựng cây DOM của Voz, vất vả dựng xong thì chạy dòng `extractVozOriginalLink(doc, url)` phát hiện ra đây là link redirect, thế là ném cả cái cây DOM siêu to đó đi, tải link mới và parse lại từ đầu. Rất hao pin.
+* **Cách sửa:** Trong `RedirectResolver`, hãy viết một Regex nhỏ để check link redirect của Voz trên chuỗi `html` thô (raw string). Hãy đẩy logic check Voz Redirect lên ngay dưới logic của AI-Hay, chặn nó lại trước khi nó kịp đi vào cỗ máy ngốn CPU Jsoup.
+
+**Tổng kết:** Flow hiện tại đã dựng được một "khung xương" vững vàng, nhưng các "khớp nối" xử lý dữ liệu (đặc biệt là quản lý Jsoup, RAM và Charset) đang được xử lý hơi ẩu, mang đặc trưng của việc "cào thử thấy ra chữ là được" mà chưa tối ưu cho trường hợp web phức tạp. Bạn cần fix ít nhất là mục 1, 2 và 3 để app không bị crash và không bị lỗi font/mất chữ.
