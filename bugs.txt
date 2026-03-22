@@ -1,0 +1,37 @@
+{
+  "issues": [
+    {
+      "issue_description": "Nguy cơ tràn bộ nhớ (OutOfMemoryError) khi dọn dẹp dữ liệu cũ trên Firestore",
+      "location": "app/src/main/java/com/skul9x/rssreader/data/remote/FirestoreSyncRepository.kt, trong hàm deleteOldItems()",
+      "reason": "Hàm thực hiện fetch (`get().await()`) toàn bộ các document thỏa mãn điều kiện thời gian (`olderThan`) trên Firestore về RAM thiết bị cùng một lúc mà không hề giới hạn (limit). Mặc dù sau đó code có chia chunk để xóa (Firestore delete batching), nhưng bước get() ban đầu đã tải hết vào RAM.",
+      "edge_case": "Người dùng đọc ứng dụng rất nhiều (ví dụ hàng chục nghìn tin) nhưng không mở ứng dụng trong một khoảng thời gian dài (vài tháng). Khi mở lại, trigger dọn dẹp chạy ngầm sẽ kéo cùng lúc hàng chục nghìn document xuống thiết bị, gây phình RAM đột biến và crash ứng dụng (OOM).",
+      "fix": {
+        "file": "FirestoreSyncRepository.kt",
+        "line_instruction": "Thêm `.limit(500)` vào truy vấn querySnapshot bên trong hàm `deleteOldItems` và bỏ chia chunk thừa thãi.",
+        "code_patch": "suspend fun deleteOldItems(olderThan: Long) {\n    try {\n        val querySnapshot = getUserCollection()\n            .whereLessThan(\"readTimestamp\", olderThan)\n            .limit(500) // Chỉ xóa dần 500 records mỗi lần để chống OOM\n            .get()\n            .await()\n\n        val total = querySnapshot.size()\n        if (total > 0) {\n            val batch = firestore.batch()\n            querySnapshot.documents.forEach { doc ->\n                batch.delete(doc.reference)\n            }\n            batch.commit().await()\n            logRepo?.logInfo(\"Deleted $total old items from Firestore\", \"Older than: $olderThan\")\n        }\n    } catch (e: Exception) {\n        logRepo?.logError(\"Failed to delete old items from Firestore\", e)\n        throw e\n    }\n}"
+      }
+    },
+    {
+      "issue_description": "Lỗi Sync Data một phần: Dữ liệu tải lên thành công nhưng local chưa kịp cập nhật trạng thái dẫn đến upload lặp lại nhiều lần",
+      "location": "app/src/main/java/com/skul9x/rssreader/data/sync/SyncCoordinator.kt, trong hàm performFullSync()",
+      "reason": "Hàm `performFullSync()` gộp toàn bộ `pendingItems` đẩy vào hàm `uploadBatch`. Hàm `uploadBatch` sẽ chia thành các chunk 400 để gửi đi. Nếu trong quá trình tải lên (ví dụ ở chunk thứ 2) xảy ra lỗi rớt mạng, hàm sẽ throw Exception và kết thúc luồng. Kết quả là lệnh `localRepo.markAsSynced(pendingItems)` ở bên dưới không bao giờ được gọi. Các bản ghi thuộc chunk 1 (đã lên Firestore thành công) vẫn bị kẹt ở trạng thái `PENDING` dưới local.",
+      "edge_case": "Người dùng có 1000 tin chưa sync do đi qua vùng mất sóng. Khi có mạng, chunk 1 (400 tin) gửi thành công. Đang gửi chunk 2 thì lại mất sóng, ứng dụng ném lỗi. Lần sau có mạng, ứng dụng lại tiếp tục gửi lại toàn bộ 1000 tin từ đầu, gây lãng phí băng thông và thao tác Write của Firebase.",
+      "fix": {
+        "file": "SyncCoordinator.kt",
+        "line_instruction": "Cập nhật hàm `performFullSync()`: Chia chunk trực tiếp ở SyncCoordinator và đánh dấu thành công theo từng cục (chunk).",
+        "code_patch": "val pendingItems = localRepo.getPendingItems()\nif (pendingItems.isNotEmpty()) {\n    // Chia chunk xử lý để đảm bảo an toàn nếu rớt mạng giữa chừng\n    pendingItems.chunked(400).forEach { chunk ->\n        firestoreRepo.uploadBatch(chunk)\n        // Cập nhật trạng thái SYNCED ngay khi chunk upload thành công\n        localRepo.markAsSynced(chunk.map { it.newsId })\n    }\n}"
+      }
+    },
+    {
+      "issue_description": "Rò rỉ bộ nhớ (Memory Leak) âm thầm với biến cache tin đã đọc",
+      "location": "app/src/main/java/com/skul9x/rssreader/data/repository/RssRepository.kt, biến memoryPendingReadIds",
+      "reason": "Biến `memoryPendingReadIds` được khai báo là một `ConcurrentHashMap.newKeySet()` hoạt động như bộ nhớ đệm trên RAM (in-memory cache) để lưu ID tin vừa mới đọc. Tuy nhiên, luồng code hiện tại chỉ thực hiện việc thêm phần tử (`add`) vào Set này khi gọi hàm `markNewsAsRead`, nhưng không có bất kỳ logic nào để xóa bớt dữ liệu ra.",
+      "edge_case": "Do ứng dụng là RSS Reader tích hợp trên màn hình ô tô (có thể chạy nền trong nhiều tuần không reset), nếu người dùng liên tục nghe/đọc tin qua nhiều ngày, Set string này sẽ ngày càng phình to, chiếm dụng RAM và làm chậm quá trình duyệt mảng (`filter { it !in memoryPendingReadIds }`) khi sinh list tin mới.",
+      "fix": {
+        "file": "RssRepository.kt",
+        "line_instruction": "Thêm lệnh clear RAM cache vào hàm dọn dẹp định kỳ `cleanupOldReadHistory()`.",
+        "code_patch": "suspend fun cleanupOldReadHistory() = withContext(Dispatchers.IO) {\n    val retentionDays = com.skul9x.rssreader.utils.AppConfig.READ_HISTORY_RETENTION_DAYS\n    val cutoffTime = System.currentTimeMillis() - (retentionDays * 24 * 60 * 60 * 1000L)\n    readNewsDao.deleteOlderThan(cutoffTime)\n    // Xóa cache in-memory để giải phóng RAM\n    memoryPendingReadIds.clear()\n}"
+      }
+    }
+  ]
+}
