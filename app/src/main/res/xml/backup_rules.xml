@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Backup rules file for Android < 12.
+   See https://developer.android.com/guide/topics/data/autobackup
+-->
+<full-backup-content>
+    <!-- Exclude the EncryptedSharedPreferences file containing API Keys -->
+    <exclude domain="sharedpref" path="api_keys_secure.xml"/>
+</full-backup-content>

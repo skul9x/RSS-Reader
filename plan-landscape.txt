@@ -1,0 +1,181 @@
+Chào bạn, việc mang tính năng đọc không giới hạn (Continuous Reading) sang chế độ màn hình ngang (Landscape) là một nâng cấp rất hợp lý để tối ưu trải nghiệm người dùng trên tablet hoặc khi xoay ngang điện thoại. 
+
+Rất may mắn là nền tảng logic cốt lõi của bạn đã được chuẩn bị sẵn. Trong file `MainViewModel.kt` bạn cung cấp, hàm `startContinuousReading()` và trạng thái `isContinuousMode` đã được định nghĩa và quản lý thông qua `NewsReaderService`. Do đó, công việc của chúng ta chủ yếu tập trung vào việc cập nhật tầng UI (Giao diện) ở chế độ Landscape.
+
+Dưới đây là kế hoạch chi tiết từng Phase kèm theo code hướng dẫn để bạn thực hiện:
+
+### Phase 1: Chuẩn bị Component Nút bấm (Button) hỗ trợ Long-Press
+Theo như comment trong `MainViewModel.kt`, chế độ đọc liên tục được kích hoạt bằng cách **nhấn giữ (long-press)** vào nút "Đọc 5 tin". Ở màn hình ngang, không gian rộng hơn, bạn có thể quyết định dùng chung logic nhấn giữ này, hoặc tách ra làm một nút riêng. Dưới đây là cách nâng cấp nút "Đọc 5 tin" để hỗ trợ cả 2 action.
+
+**Tạo/Cập nhật Composable `PlayAllButton`:**
+Bạn có thể đặt đoạn code này trong file chứa UI Landscape (ví dụ `MainScreenLandscape.kt` hoặc phân nhánh trong `MainScreen.kt`).
+
+```kotlin
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun LandscapePlayAllButton(
+    isSummarizing: Boolean,
+    isReadAllMode: Boolean,
+    isContinuousMode: Boolean,
+    onPlayAllClick: () -> Unit,
+    onContinuousLongClick: () -> Unit,
+    onStopClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val haptic = LocalHapticFeedback.current
+
+    // Đổi màu hoặc text dựa trên state để báo hiệu cho user
+    val buttonText = when {
+        isContinuousMode -> "Đang đọc liên tục... (Chạm để Dừng)"
+        isReadAllMode -> "Đang đọc 5 tin... (Chạm để Dừng)"
+        else -> "Đọc 5 tin (Nhấn giữ: Đọc liên tục)"
+    }
+
+    val containerColor = if (isSummarizing) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer
+
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = containerColor,
+        shape = MaterialTheme.shapes.medium,
+    ) {
+        Box(
+            modifier = Modifier
+                .combinedClickable(
+                    onClick = {
+                        if (isSummarizing) {
+                            onStopClick()
+                        } else {
+                            onPlayAllClick()
+                        }
+                    },
+                    onLongClick = {
+                        if (!isSummarizing) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onContinuousLongClick()
+                        }
+                    }
+                )
+                .padding(16.dp),
+            contentAlignment = androidx.compose.ui.Alignment.Center
+        ) {
+            Text(
+                text = buttonText,
+                style = MaterialTheme.typography.labelLarge,
+                color = if (isSummarizing) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+    }
+}
+```
+
+### Phase 2: Tích hợp vào Layout Landscape chính
+Trong file quy định bố cục màn hình ngang (thường chia layout theo tỷ lệ, ví dụ: 40% màn hình trái cho danh sách tin, 60% bên phải cho trình phát/nội dung), bạn cần chèn nút vừa tạo vào và truyền các event từ `MainViewModel`.
+
+**Cập nhật Layout ngang (ví dụ trong `MainScreen.kt` khi cấu hình là Landscape):**
+
+```kotlin
+@Composable
+fun MainScreenLandscape(
+    viewModel: MainViewModel,
+    uiState: MainUiState
+) {
+    Row(modifier = Modifier.fillMaxSize()) {
+        // CỘT TRÁI: Danh sách tin tức
+        Column(
+            modifier = Modifier
+                .weight(0.4f)
+                .fillMaxHeight()
+                .padding(8.dp)
+        ) {
+            // Nút điều khiển tổng nằm ở trên cùng hoặc dưới cùng của cột trái
+            LandscapePlayAllButton(
+                isSummarizing = uiState.isSummarizing,
+                isReadAllMode = uiState.isReadAllMode,
+                isContinuousMode = uiState.isContinuousMode,
+                onPlayAllClick = { viewModel.readAllNewsSummaries() },
+                onContinuousLongClick = { viewModel.startContinuousReading() }, // Kích hoạt đọc không giới hạn
+                onStopClick = { viewModel.stopSpeaking() },
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            // Danh sách tin tức
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                itemsIndexed(uiState.newsItems) { index, item ->
+                    NewsCard(
+                        news = item,
+                        isSelected = index == uiState.selectedNewsIndex,
+                        isReading = index == uiState.readingNewsIndex, // Highlight tin đang đọc
+                        onClick = { viewModel.selectNews(index) }
+                    )
+                }
+            }
+        }
+
+        // CỘT PHẢI: Trình phát Audio hoặc Nội dung chi tiết bài báo
+        Column(
+            modifier = Modifier
+                .weight(0.6f)
+                .fillMaxHeight()
+                .padding(8.dp)
+        ) {
+             // ... UI hiển thị chi tiết bài báo, tiến trình (readingProgress) hoặc Player Controls ...
+             if (uiState.isContinuousMode) {
+                 // Hiển thị một badge hoặc banner nhỏ báo hiệu đang ở chế độ rảnh tay
+                 ContinuousReadingBanner(readingProgress = uiState.readingProgress)
+             }
+        }
+    }
+}
+```
+
+### Phase 3: Xử lý hiệu ứng thị giác (Visual Feedback) cho chế độ Continuous
+Khi đọc liên tục, danh sách tin tức sẽ tự động được làm mới (refresh) sau mỗi 5 tin thông qua `NewsReaderService`. Bạn cần đảm bảo UI hiển thị rõ trạng thái này để người dùng không bị bối rối khi nội dung màn hình ngang đột ngột thay đổi.
+
+**Hiển thị Banner trạng thái:**
+```kotlin
+@Composable
+fun ContinuousReadingBanner(readingProgress: Float) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Icon(
+                    imageVector = androidx.compose.material.icons.Icons.Default.Autorenew, 
+                    contentDescription = "Continuous Mode",
+                    tint = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Chế độ đọc không giới hạn đang bật",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            LinearProgressIndicator(
+                progress = { readingProgress },
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.tertiary,
+                trackColor = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.2f)
+            )
+        }
+    }
+}
+```
+
+### Phase 4: Kiểm thử và Xử lý Xoay màn hình (Rotation Edge Cases)
+Vì bạn dùng `NewsReaderService` chạy ngầm (Foreground Service), việc xoay ngang dọc sẽ **không** làm đứt quãng âm thanh. Tuy nhiên, bạn cần test các trường hợp sau:
+
+1. **State persistence:** Đảm bảo khi xoay từ Dọc sang Ngang, `uiState.isContinuousMode` vẫn đang là `true` và `LandscapePlayAllButton` hiện đúng chữ "Đang đọc liên tục...". (Trong Jetpack Compose, hãy chắc chắn bạn đang dùng `uiState.collectAsStateWithLifecycle()` ở Root Composable).
+2. **Auto-scroll:** Khi `uiState.readingNewsIndex` thay đổi, danh sách `LazyColumn` ở bên trái có tự động cuộn (scroll) tới item đang đọc hay không? Nếu chưa có, bạn nên thêm `LaunchedEffect` với `ListState.animateScrollToItem(index)`.
