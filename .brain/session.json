@@ -1,19 +1,21 @@
 {
-  "updated_at": "2026-03-22T08:38:00Z",
+  "updated_at": "2026-03-25T15:30:00Z",
   "working_on": {
-    "feature": "Architecture Refactor & Bug Fixes",
-    "task": "Phase 3 Complete (Extractor Enhance). Ready for Phase 4 (Testing).",
+    "feature": "AI Summarization & Model Optimization",
+    "task": "Updated Gemini model list and validated fallback strategy.",
     "status": "complete",
-    "files": ["AndroidHtmlCleaner.kt"],
+    "files": ["GeminiApiClient.kt", "GeminiPrompts.kt"],
     "blockers": [],
-    "notes": "Enhanced HtmlCleaner to preserve line breaks and structure. Build successful."
+    "notes": "Added gemini-3-flash-lite-preview, removed legacy 2.0-flash models from summary list."
   },
   "pending_tasks": [
+    { "task": "Evaluate translation model efficiency", "priority": "medium", "notes": "Check if gemma-3-1b-it is truly sufficient for all content" },
     { "task": "Phase 4: Testing & Validation", "priority": "high", "notes": "Test all extractors with real-world content" },
-    { "task": "Phase 5: Performance Optimization", "priority": "medium", "notes": "Profile and optimize if needed" },
-    { "task": "Phase 6: Documentation", "priority": "low", "notes": "Update docs with new architecture" }
+    { "task": "Phase 5: Performance Optimization", "priority": "medium", "notes": "Profile and optimize if needed" }
   ],
   "recent_changes": [
+    { "timestamp": "2026-03-25T15:30:00Z", "type": "config", "description": "Updated Gemini model sequence: Flash 2.5 -> Flash 3.0 Lite (Preview) -> Flash 2.5 Lite -> Flash 3.0 (Preview). Removed 2.0 models.", "files": ["GeminiApiClient.kt"] },
+    { "timestamp": "2026-03-25T15:20:00Z", "type": "documentation", "description": "Mapped and verified AI prompts (Summarization, Translation, HTML Suggestion) in GeminiPrompts.kt", "files": ["GeminiPrompts.kt"] },
     { "timestamp": "2026-03-22T08:38:00Z", "type": "enhancement", "description": "Phase 3: Enhanced AndroidHtmlCleaner to preserve HTML structure. Maps <br> to \\n, <p>/<div> to \\n\\n, <li> to \\n• for better readability.", "files": ["AndroidHtmlCleaner.kt"] },
     { "timestamp": "2026-03-22T08:35:00Z", "type": "refactor", "description": "Phase 2: Eliminated doc.clone() memory leaks, reordered fallback strategy to Regex-first, fixed custom selector return logic.", "files": ["ContentExtractorRegistry.kt", "GenericExtractor.kt", "VnExpressExtractor.kt", "GenkExtractor.kt", "TuoiTreExtractor.kt", "ThanhNienExtractor.kt", "DanTriExtractor.kt", "NguoiQuanSatExtractor.kt", "VietnamNetExtractor.kt", "VtcNewsExtractor.kt", "AiHayExtractor.kt", "VnEconomyExtractor.kt", "VozExtractor.kt"] },
     { "timestamp": "2026-03-22T08:14:00Z", "type": "bugfix", "description": "Phase 1: Fixed Charset corruption, Voz CPU spikes, and Anti-bot resilience.", "files": ["HtmlFetcher.kt", "ArticleContentFetcher.kt", "RedirectResolver.kt"] }

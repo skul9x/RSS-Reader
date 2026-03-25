@@ -1,7 +1,7 @@
 {
   "meta": { "schema_version": "1.1.0", "awf_version": "3.3.0" },
   "project": { "name": "RSS Reader", "type": "Android App", "status": "In Progress - Architecture Refactor Phase 3" },
-  "tech_stack": { "frontend": {"framework": "Jetpack Compose (Material 3)"}, "backend": {"local": "Room", "sync": "Firebase"}, "database": {"type": "SQLite via Room"} },
+  "tech_stack": { "frontend": {"framework": "Jetpack Compose (Material 3)"}, "backend": {"local": "Room", "sync": "Firebase", "ai": "Gemini (Flash 2.5/3.0 Lite)"}, "database": {"type": "SQLite via Room"} },
   "database_schema": { 
     "summary": "Quản lý RSS feeds, tin tức đã cache và lịch sử đọc",
     "tables": ["cached_news", "read_news", "rss_feed"], 
@@ -26,7 +26,8 @@
     "patterns": [
       "Repository pattern with background sync", 
       "Jetpack Compose for UI", 
-      "Concurrent memory cache for read IDs (防止 Race Condition)"
+      "Concurrent memory cache for read IDs (防止 Race Condition)",
+      "Model-First Rotation: Try same model across all API keys before fallback to heavier/preview model"
     ], 
     "gotchas": [
       "Room limitations with empty collections in IN clause (causes Crash) - Use NoExclude query variant", 

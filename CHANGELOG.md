@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1] - 2026-03-25
+
+### Changed
+- Cập nhật danh sách model Gemini: Ưu tiên Flash 2.5 và bổ sung Flash 3.0 Lite (Preview).
+- Tối ưu hóa thứ tự fallback model để tăng tốc độ phản hồi và tiết kiệm quota.
+- Cập nhật phiên bản ứng dụng lên v1.1.
+
 ## [Unreleased] - 2026-03-22
 
 ### Fixed
