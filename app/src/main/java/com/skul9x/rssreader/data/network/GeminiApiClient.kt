@@ -44,7 +44,7 @@ class GeminiApiClient(context: Context) {
         // Models (cycled in order when quota exceeded)
         private val MODELS = listOf(
             "models/gemini-2.5-flash",
-            "models/gemini-3-flash-lite-preview",
+            "models/gemini-3.1-flash-lite-preview",
             "models/gemini-2.5-flash-lite",
             "models/gemini-3-flash-preview"
         )
@@ -162,12 +162,9 @@ class GeminiApiClient(context: Context) {
     suspend fun translateToVietnamese(text: String): String {
         if (text.isBlank()) return text
         
-        // Models for translation (ordered from lightest to heaviest)
+        // Single model for translation
         val translationModels = listOf(
-            "models/gemma-3-1b-it",       // 1B params - lightest, fastest
-            "models/gemma-3-4b-it",       // 4B params - balanced
-            "models/gemini-2.0-flash-lite",
-            "models/gemini-2.5-flash-lite"
+            "models/gemini-flash-lite-latest"
         )
         
         return withContext(Dispatchers.IO) {
@@ -246,11 +243,9 @@ class GeminiApiClient(context: Context) {
     suspend fun translateTitleBatch(titles: Map<String, String>): Map<String, String> {
         if (titles.isEmpty()) return emptyMap()
         
-        // Models for translation (use faster models for batch)
+        // Single model for batch translation
         val translationModels = listOf(
-            "models/gemini-2.0-flash-lite", // Fast and cheap
-            "models/gemini-2.5-flash-lite",
-            "models/gemini-2.0-flash"
+            "models/gemini-flash-lite-latest"
         )
         
         return withContext(Dispatchers.IO) {
