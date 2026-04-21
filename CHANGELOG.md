@@ -1,6 +1,6 @@
 # Changelog
  
-## [Unreleased] - 2026-04-21
+## [1.3] - 2026-04-21
 
 ### Added
 - **Readability4J Integration (Phase 1-4):**
