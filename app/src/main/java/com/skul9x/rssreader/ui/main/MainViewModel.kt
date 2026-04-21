@@ -192,7 +192,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     viewModelScope.launch {
                         try {
                             val titlesMap = itemsToTranslate.associate { it.id to it.title }
-                            val translatedMap = geminiClient.translateTitleBatch(titlesMap)
+                            val translatedMap = geminiClient.translateTitleBatchWithFallback(titlesMap)
 
                             // 3. Update UI with results
                             if (translatedMap.isNotEmpty()) {

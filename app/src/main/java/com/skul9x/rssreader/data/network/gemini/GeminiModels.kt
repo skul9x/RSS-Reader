@@ -8,6 +8,7 @@ sealed class ApiResult {
     object QuotaExceeded : ApiResult()
     object ServerBusy : ApiResult()
     object ModelNotFound : ApiResult()
+    object NetworkError : ApiResult()
     data class Error(val message: String) : ApiResult()
 }
 

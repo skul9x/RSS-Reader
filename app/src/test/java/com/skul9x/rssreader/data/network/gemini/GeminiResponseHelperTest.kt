@@ -51,4 +51,19 @@ class GeminiResponseHelperTest {
         assertFalse("Did NOT expect thinkingConfig for empty model. Request: $requestBodyEmpty", 
             requestBodyEmpty.contains("\"thinkingConfig\""))
     }
+    @Test
+    fun testBuildRequestBody_JsonMode() {
+        val prompt = "Translate this"
+        val model = "models/gemini-2.5-flash"
+        
+        // When useJsonMode is true, should contain responseMimeType
+        val requestBodyJson = GeminiResponseHelper.buildRequestBody(prompt, model, useJsonMode = true)
+        assertTrue("Expected responseMimeType for JSON mode but not found. Request: $requestBodyJson", 
+            requestBodyJson.contains("\"responseMimeType\":\"application/json\""))
+
+        // When useJsonMode is false (default), should NOT contain responseMimeType
+        val requestBodyDefault = GeminiResponseHelper.buildRequestBody(prompt, model)
+        assertFalse("Did NOT expect responseMimeType for default mode. Request: $requestBodyDefault", 
+            requestBodyDefault.contains("\"responseMimeType\""))
+    }
 }

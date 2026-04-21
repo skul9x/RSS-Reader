@@ -12,7 +12,13 @@ object GeminiResponseHelper {
     /**
      * Build JSON Request Body for Gemini API.
      */
-    fun buildRequestBody(prompt: String, model: String = "", temperature: Double = 0.7, maxOutputTokens: Int = 4096): String {
+    fun buildRequestBody(
+        prompt: String, 
+        model: String = "", 
+        temperature: Double = 0.7, 
+        maxOutputTokens: Int = 4096,
+        useJsonMode: Boolean = false
+    ): String {
         val json = buildJsonObject {
             putJsonArray("contents") {
                 addJsonObject {
@@ -27,6 +33,11 @@ object GeminiResponseHelper {
                 put("temperature", temperature)
                 put("maxOutputTokens", maxOutputTokens)
                 put("topP", 0.95)
+                
+                // NEW: JSON Mode - force Gemini to return valid JSON
+                if (useJsonMode) {
+                    put("responseMimeType", "application/json")
+                }
                 
                 // Disable thinking to avoid thinking tokens in response
                 // ONLY add thinkingConfig for Gemini 3+ models or "-latest" tags.

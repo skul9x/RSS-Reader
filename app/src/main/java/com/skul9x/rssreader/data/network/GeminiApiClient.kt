@@ -186,7 +186,7 @@ class GeminiApiClient(context: Context) {
                     try {
                         Log.d(TAG, "Trying translation: $model with API key ${keyIndex + 1}/${keys.size}")
                         val translationPrompt = GeminiPrompts.buildTranslationPrompt(text)
-                        val result = tryTranslate(apiKey, model, translationPrompt)
+                        val result = tryTranslate(apiKey, model, translationPrompt, useJsonMode = false)
                         
                         when (result) {
                             is ApiResult.Success -> {
@@ -213,6 +213,17 @@ class GeminiApiClient(context: Context) {
                                 )
                                 quotaManager.markCooldown(model, apiKey)
                                 continue
+                            }
+                            is ApiResult.NetworkError -> {
+                                Log.w(TAG, "Network error detected, stopping all retries")
+                                ActivityLogger.log(
+                                    eventType = "TRANSLATE_ABORT",
+                                    url = "",
+                                    message = "Dừng dịch - Lỗi mạng",
+                                    details = "Model: $model | API ${keyIndex + 1}",
+                                    isError = true
+                                )
+                                return@withContext text  // Trả về text gốc ngay lập tức
                             }
                             else -> {
                                 Log.w(TAG, "Translation failed: $model | API ${keyIndex + 1}, trying next...")
@@ -278,29 +289,20 @@ class GeminiApiClient(context: Context) {
 
                     try {
                         Log.d(TAG, "Trying batch translation: $model | API ${keyIndex + 1}")
-                        val result = tryTranslate(apiKey, model, prompt)
+                        val result = tryTranslate(apiKey, model, prompt, useJsonMode = true)
                         
                         when (result) {
                             is ApiResult.Success -> {
-                                // Strip markdown code blocks if present (```json ... ```)
-                                val cleaned = result.text
-                                    .replace(Regex("```json\\s*"), "")
-                                    .replace(Regex("```\\s*"), "")
-                                    .trim()
-                                
-                                // Find outermost JSON object using regex
-                                val jsonMatch = Regex("\\{[\\s\\S]*\\}").find(cleaned)
-                                val fullJson = jsonMatch?.value ?: "{}"
-                                
                                 try {
-                                    val parsed = Json.parseToJsonElement(fullJson).jsonObject
+                                    // JSON Mode ensures response is valid JSON, parse directly
+                                    val parsed = Json.parseToJsonElement(result.text.trim()).jsonObject
                                     val resultMap = parsed.entries.associate { (k, v) ->
                                         k to v.jsonPrimitive.content
                                     }
                                     Log.d(TAG, "Batch translation success: ${resultMap.size} items")
                                     return@withContext resultMap
                                 } catch (e: Exception) {
-                                    Log.e(TAG, "Failed to parse batch response", e)
+                                    Log.e(TAG, "Failed to parse batch response: ${result.text.take(200)}", e)
                                     continue
                                 }
                             }
@@ -322,9 +324,17 @@ class GeminiApiClient(context: Context) {
                                 quotaManager.markCooldown(model, apiKey)
                                 continue
                             }
+                            is ApiResult.NetworkError -> {
+                                Log.w(TAG, "Network error, aborting batch translation")
+                                return@withContext emptyMap()
+                            }
                             else -> continue
                         }
+                    } catch (e: java.io.IOException) {
+                        Log.e(TAG, "Batch translation network error, aborting", e)
+                        return@withContext emptyMap()
                     } catch (e: Exception) {
+                        Log.e(TAG, "Batch translation exception: $model | API ${keyIndex + 1}", e)
                         continue
                     }
                 }
@@ -334,12 +344,87 @@ class GeminiApiClient(context: Context) {
             emptyMap()
         }
     }
+
+    /**
+     * Translate titles with automatic batch-to-single fallback and chunking.
+     * 
+     * Strategy:
+     * 1. Chunk large batches to prevent prompt overflow (max 15 titles per batch)
+     * 2. Try batch translation first (efficient)
+     * 3. If batch returns partial results or fails completely (e.g. safety filters),
+     *    translate missing titles individually.
+     *
+     * @param titles Map of ID -> Original Title
+     * @return Map of ID -> Translated Title (best effort, may be partial)
+     */
+    suspend fun translateTitleBatchWithFallback(titles: Map<String, String>): Map<String, String> {
+        if (titles.isEmpty()) return emptyMap()
+        
+        val CHUNK_SIZE = 15
+        val allBatchResults = mutableMapOf<String, String>()
+        
+        // Step 1: Process in chunks
+        if (titles.size > CHUNK_SIZE) {
+            Log.d(TAG, "Large batch (${titles.size}), splitting into chunks of $CHUNK_SIZE")
+            titles.entries.chunked(CHUNK_SIZE).forEachIndexed { index, chunk ->
+                val chunkMap = chunk.associate { it.key to it.value }
+                Log.d(TAG, "Processing chunk ${index + 1}/${(titles.size + CHUNK_SIZE - 1) / CHUNK_SIZE}")
+                
+                val chunkResult = translateTitleBatch(chunkMap)
+                allBatchResults.putAll(chunkResult)
+            }
+        } else {
+            val batchResult = translateTitleBatch(titles)
+            allBatchResults.putAll(batchResult)
+        }
+        
+        // Step 2: Check for missing titles
+        val missingTitles = titles.filter { (id, _) -> id !in allBatchResults }
+        
+        if (missingTitles.isEmpty()) {
+            Log.d(TAG, "Batch translation complete: ${allBatchResults.size}/${titles.size}")
+            return allBatchResults
+        }
+        
+        if (allBatchResults.isNotEmpty()) {
+            Log.d(TAG, "Batch partial: ${allBatchResults.size}/${titles.size}, falling back for ${missingTitles.size}")
+        } else {
+            Log.w(TAG, "Batch failed completely, falling back to single translation for ${titles.size} titles")
+        }
+        
+        // Step 3: Single fallback for missing items
+        val singleResults = mutableMapOf<String, String>()
+        for ((id, title) in missingTitles) {
+            try {
+                // translateToVietnamese handles its own retries/failover
+                val translated = translateToVietnamese(title)
+                
+                // Only add if successfully translated (different from original and not empty)
+                if (translated != title && translated.isNotBlank()) {
+                    singleResults[id] = translated
+                    Log.d(TAG, "Single fallback success for ID: $id")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Single fallback failed for ID: $id", e)
+                // Continue to next title - don't let one failure stop others
+            }
+        }
+        
+        // Step 4: Final merge
+        val finalResult = allBatchResults.toMutableMap()
+        finalResult.putAll(singleResults)
+        
+        Log.d(TAG, "Final translation result: ${finalResult.size}/${titles.size} " +
+              "(batch: ${allBatchResults.size}, single: ${singleResults.size})")
+              
+        return finalResult
+    }
     
     /**
      * Try to translate text using Gemini API.
      * @param prompt Ready-to-use prompt (already built by caller). DO NOT wrap again.
      */
-    private suspend fun tryTranslate(apiKey: String, model: String, prompt: String): ApiResult {
+    private suspend fun tryTranslate(apiKey: String, model: String, prompt: String, useJsonMode: Boolean = false): ApiResult {
         val startTime = System.currentTimeMillis()
         
         return try {
@@ -353,7 +438,7 @@ class GeminiApiClient(context: Context) {
                 isError = false
             )
             
-            val requestBody = GeminiResponseHelper.buildRequestBody(prompt, model)
+            val requestBody = GeminiResponseHelper.buildRequestBody(prompt, model, useJsonMode = useJsonMode)
             
             val request = Request.Builder()
                 .url("$BASE_URL/$model:generateContent?key=$apiKey")
@@ -466,6 +551,17 @@ class GeminiApiClient(context: Context) {
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
+        } catch (e: java.io.IOException) {
+            // NEW: Network error - don't retry with other keys
+            val totalDuration = System.currentTimeMillis() - startTime
+            ActivityLogger.log(
+                eventType = "TRANSLATE_ERROR",
+                url = "",
+                message = "Network error (${totalDuration}ms)",
+                details = "${e.javaClass.simpleName}: ${e.message}",
+                isError = true
+            )
+            ApiResult.NetworkError
         } catch (e: Exception) {
             val totalDuration = System.currentTimeMillis() - startTime
             ActivityLogger.log(
@@ -553,6 +649,10 @@ class GeminiApiClient(context: Context) {
                         Log.e(TAG, "API error: ${result.message} | $model | API key ${keyIndex + 1}")
                         continue 
                     }
+                    is ApiResult.NetworkError -> {
+                        Log.w(TAG, "Network error during summarization, aborting")
+                        return SummarizeResult.Error("Lỗi kết nối mạng")
+                    }
                 }
             }
             // All API keys exhausted for this model, try next model
@@ -602,6 +702,10 @@ class GeminiApiClient(context: Context) {
                     }
                     is ApiResult.Error -> {
                         Log.e(TAG, "SuggestClass: API error: ${result.message}")
+                    }
+                    is ApiResult.NetworkError -> {
+                        Log.w(TAG, "SuggestClass: Network error, aborting suggestion")
+                        return SuggestClassResult.Error("Lỗi kết nối mạng")
                     }
                 }
             }
@@ -694,6 +798,9 @@ class GeminiApiClient(context: Context) {
         } catch (e: kotlinx.coroutines.CancellationException) {
             Log.d(TAG, "API call cancelled")
             throw e  // Re-throw to propagate cancellation
+        } catch (e: java.io.IOException) {
+            Log.e(TAG, "Network error during content generation", e)
+            ApiResult.NetworkError
         } catch (e: Exception) {
             Log.e(TAG, "Exception during API call", e)
             ApiResult.Error(e.message ?: "Unknown error")
@@ -835,6 +942,9 @@ class GeminiApiClient(context: Context) {
         } catch (e: kotlinx.coroutines.CancellationException) {
             Log.d(TAG, "SuggestClass: API call cancelled")
             throw e
+        } catch (e: java.io.IOException) {
+            Log.e(TAG, "SuggestClass: Network error during content suggestion", e)
+            ApiResult.NetworkError
         } catch (e: Exception) {
             Log.e(TAG, "SuggestClass: Exception during API call", e)
             ApiResult.Error(e.message ?: "Unknown error")
