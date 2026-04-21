@@ -12,7 +12,7 @@ object GeminiResponseHelper {
     /**
      * Build JSON Request Body for Gemini API.
      */
-    fun buildRequestBody(prompt: String, temperature: Double = 0.7, maxOutputTokens: Int = 4096): String {
+    fun buildRequestBody(prompt: String, model: String = "", temperature: Double = 0.7, maxOutputTokens: Int = 4096): String {
         val json = buildJsonObject {
             putJsonArray("contents") {
                 addJsonObject {
@@ -27,11 +27,14 @@ object GeminiResponseHelper {
                 put("temperature", temperature)
                 put("maxOutputTokens", maxOutputTokens)
                 put("topP", 0.95)
+                
                 // Disable thinking to avoid thinking tokens in response
-                // Gemini 2.5/3 models have thinking enabled by default
-                putJsonObject("thinkingConfig") {
-                    put("thinkingBudget", 0)
-                    put("thinkingLevel", "minimal") // Recommended for Gemini 3.1 to reduce latency
+                // ONLY add thinkingConfig for Gemini 3+ models or "-latest" tags.
+                // Gemini 2.5 series does NOT support thinkingConfig and will return HTTP 400 Bad Request.
+                if (model.contains("gemini-3") || model.contains("latest")) {
+                    putJsonObject("thinkingConfig") {
+                        put("thinkingLevel", "minimal") // Recommended for Gemini 3.1 to reduce latency
+                    }
                 }
             }
             putJsonArray("safetySettings") {

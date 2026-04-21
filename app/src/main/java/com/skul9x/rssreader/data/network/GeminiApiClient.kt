@@ -43,9 +43,9 @@ class GeminiApiClient(context: Context) {
 
         // Models (cycled in order when quota exceeded)
         private val MODELS = listOf(
-            "models/gemini-3.1-flash-lite-preview",
             "models/gemini-2.5-flash-lite",
             "models/gemini-3-flash-preview",
+            "models/gemini-3.1-flash-lite-preview",
             "models/gemini-2.5-flash"
         )
     }
@@ -353,7 +353,7 @@ class GeminiApiClient(context: Context) {
                 isError = false
             )
             
-            val requestBody = GeminiResponseHelper.buildRequestBody(prompt)
+            val requestBody = GeminiResponseHelper.buildRequestBody(prompt, model)
             
             val request = Request.Builder()
                 .url("$BASE_URL/$model:generateContent?key=$apiKey")
@@ -627,7 +627,7 @@ class GeminiApiClient(context: Context) {
             }
             
             val prompt = GeminiPrompts.buildSummarizationPrompt(truncatedContent)
-            val requestBody = GeminiResponseHelper.buildRequestBody(prompt)
+            val requestBody = GeminiResponseHelper.buildRequestBody(prompt, model)
             
             val request = Request.Builder()
                 .url("$BASE_URL/$model:generateContent?key=$apiKey")
@@ -768,7 +768,7 @@ class GeminiApiClient(context: Context) {
             }
 
             val prompt = GeminiPrompts.buildSuggestClassPrompt(truncatedHtml)
-            val requestBody = GeminiResponseHelper.buildRequestBody(prompt)
+            val requestBody = GeminiResponseHelper.buildRequestBody(prompt, model)
 
             val request = Request.Builder()
                 .url("$BASE_URL/$model:generateContent?key=$apiKey")
