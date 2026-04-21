@@ -31,6 +31,7 @@ object GeminiResponseHelper {
                 // Gemini 2.5/3 models have thinking enabled by default
                 putJsonObject("thinkingConfig") {
                     put("thinkingBudget", 0)
+                    put("thinkingLevel", "minimal") // Recommended for Gemini 3.1 to reduce latency
                 }
             }
             putJsonArray("safetySettings") {
