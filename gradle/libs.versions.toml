@@ -26,6 +26,7 @@ lifecycle = "2.8.7"
 ksp = "2.0.21-1.0.27"
 # Serialization
 kotlinxSerializationJson = "1.7.3"
+readability4j = "1.0.8"
 
 # Firebase
 firebaseBom = "32.7.0"
@@ -86,6 +87,7 @@ androidx-media = { group = "androidx.media", name = "media", version = "1.7.0" }
 
 # Parsing
 jsoup = { group = "org.jsoup", name = "jsoup", version = "1.18.1" }
+readability4j = { group = "net.dankito.readability4j", name = "readability4j", version.ref = "readability4j" }
 
 # Firebase
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }

@@ -103,6 +103,7 @@ dependencies {
 
     // HTML Parsing
     implementation(libs.jsoup)
+    implementation(libs.readability4j)
 
     // Testing
     testImplementation(libs.junit)

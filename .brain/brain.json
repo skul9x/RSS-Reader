@@ -1,7 +1,12 @@
 {
   "meta": { "schema_version": "1.1.0", "awf_version": "3.3.0" },
-  "project": { "name": "RSS Reader", "type": "Android App", "status": "In Progress - Architecture Refactor Phase 3" },
-  "tech_stack": { "frontend": {"framework": "Jetpack Compose (Material 3)"}, "backend": {"local": "Room", "sync": "Firebase", "ai": "Gemini (Flash 2.5/3.0 Lite)"}, "database": {"type": "SQLite via Room"} },
+  "project": { "name": "RSS Reader", "type": "Android App", "status": "In Progress - Integrated Smart Content Extraction" },
+  "tech_stack": { 
+    "frontend": {"framework": "Jetpack Compose (Material 3)"}, 
+    "backend": {"local": "Room", "sync": "Firebase", "ai": "Gemini (Flash 2.5/3.0 Lite)"}, 
+    "database": {"type": "SQLite via Room"},
+    "libraries": ["Readability4J 1.0.8", "Jsoup 1.18.1"]
+  },
   "database_schema": { 
     "summary": "Quản lý RSS feeds, tin tức đã cache và lịch sử đọc",
     "tables": ["cached_news", "read_news", "rss_feed"], 
@@ -12,7 +17,7 @@
     "Lịch sử đọc giữ trong 7 ngày",
     "URL Normalization: Loại bỏ tracking params (utm_, fbclid) để tránh trùng lặp tin",
     "Continuous mode đọc liên tục các tin lấy tự động (sắp hỗ trợ landscape mode)",
-    "Extraction Strategy: Try Regex first for performance, Jsoup as fallback"
+    "Extraction Strategy: Custom > Site-Specific > Readability4J > Generic"
   ],
   "features": [
     "Đọc tin tức offline",
@@ -20,28 +25,31 @@
     "Continuous reading",
     "Firebase Sync (read read_news status)",
     "Media Button support with auto-refresh batching",
-    "High-Performance Content Extractors (Phase 2)"
+    "Smart Content Extraction via Readability4J (Phase 3+)"
   ],
   "knowledge_items": { 
     "patterns": [
       "Repository pattern with background sync", 
       "Jetpack Compose for UI", 
       "Concurrent memory cache for read IDs (防止 Race Condition)",
-      "Model-First Rotation: Try same model across all API keys before fallback to heavier/preview model"
+      "Model-First Rotation: Try same model across all API keys before fallback to heavier/preview model",
+      "Tiered Content Extraction Pipeline"
     ], 
     "gotchas": [
       "Room limitations with empty collections in IN clause (causes Crash) - Use NoExclude query variant", 
       "N+1 query issues - Use DB-side ID filtering instead of loading all to RAM",
       "Jsoup charset corruption when passing String - Always pass InputStream/ByteArray for auto-detection",
       "Voz.vn large DOM CPU spikes - Use Regex to detect redirects before Parsing",
-      "Memory leak via doc.clone(): Jsoup cloning duplicates large DOMs. Clean HTML as strings instead."
+      "Memory leak via doc.clone(): Jsoup cloning duplicates large DOMs. Clean HTML as strings instead.",
+      "Readability4J SLF4J Dependency: Missing binder causes R8 build failure. Use -dontwarn org.slf4j.**"
     ], 
     "conventions": [
       "Use Flow for observing DB changes", 
       "Use suspend functions for DAO queries",
       "Always normalize RSS URLs before processing",
       "Avoid doc.clone() in Jsoup - Use string-based cleaning for memory efficiency",
-      "Prefer Regex extraction over Jsoup when possible for speed"
+      "Prefer Regex extraction over Jsoup when possible for speed",
+      "Use Readability4J for unknown sites to improve Gemini summary quality"
     ] 
   }
 }

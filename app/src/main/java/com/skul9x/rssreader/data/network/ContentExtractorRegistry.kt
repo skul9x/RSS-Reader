@@ -6,6 +6,7 @@ import com.skul9x.rssreader.utils.AppLogger
 import com.skul9x.rssreader.utils.HtmlCleaner
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
+import com.skul9x.rssreader.data.network.extractors.ReadabilityExtractor
 
 class ContentExtractorRegistry(
     private val htmlCleaner: HtmlCleaner,
@@ -29,6 +30,7 @@ class ContentExtractorRegistry(
     )
     
     private val genericExtractor = GenericExtractor(htmlCleaner)
+    private val readabilityExtractor = ReadabilityExtractor(htmlCleaner)
     private var customSelectorManager: CustomSelectorManager? = null
 
     companion object {
@@ -86,17 +88,23 @@ class ContentExtractorRegistry(
             }
         }
 
-        // 3. Phase 2 Fix: Fallback order changed - Try Regex before Jsoup for performance
-        // Regex is faster and doesn't require DOM traversal
-        
-        // Try generic Regex first (faster, no DOM overhead)
+        // 3. ✨ Readability4J - Smart extraction for unknown sites
+        val readabilityResult = readabilityExtractor.extract(html, url)
+        if (readabilityResult != null && readabilityResult.length > 200) {
+            logger.logJsoup(url, true, "Readability4J extraction success: ${readabilityResult.length} chars")
+            return readabilityResult
+        } else {
+            logger.logJsoup(url, false, "Readability4J failed/short (${readabilityResult?.length ?: 0} chars), falling back to Generic")
+        }
+
+        // 4. Generic Regex fallback (slower, less accurate)
         val genericRegex = genericExtractor.extractByRegex(html)
         if (genericRegex != null && genericRegex.length > 200) {
             logger.logJsoup(url, true, "Generic Regex extraction success")
             return genericRegex
         }
         
-        // Try generic Jsoup as last resort (slower but more reliable)
+        // 5. Generic Jsoup as absolute last resort
         return genericExtractor.extractByJsoup(doc, url)
     }
 

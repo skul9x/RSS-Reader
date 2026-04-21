@@ -1,4 +1,14 @@
 # Changelog
+ 
+## [Unreleased] - 2026-04-21
+
+### Added
+- **Readability4J Integration (Phase 1-4):**
+  - **Core Integration:** Integrated `net.dankito.readability4j:readability4j:1.0.8` as a smart content extraction layer.
+  - **ReadabilityExtractor**: Created a robust wrapper around Readability4J to analyze DOM structure, extract main article content, and handle Vietnamese encoding correctly.
+  - **Pipeline Upgrade**: Updated `ContentExtractorRegistry` to insert Readability4J between site-specific extractors and generic fallbacks, improving extraction for unknown international sites.
+  - **Testing Suite**: Added comprehensive unit and integration tests (`ReadabilityExtractorTest`, `ContentExtractorRegistryTest`) covering edge cases, encoding, and priority logic.
+  - **Build & ProGuard**: Optimized `proguard-rules.pro` to support Readability4J and ignore missing SLF4J binders, ensuring successful release builds.
 
 ## [1.1] - 2026-03-25
 

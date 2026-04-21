@@ -48,3 +48,8 @@
 
 # Data Classes (Keep models used in serialization/API)
 -keep class com.skul9x.rssreader.data.model.** { *; }
+
+# Readability4J - Keep all classes (thuật toán reflection-based scoring)
+-keep class net.dankito.readability4j.** { *; }
+-dontwarn net.dankito.readability4j.**
+-dontwarn org.slf4j.**
