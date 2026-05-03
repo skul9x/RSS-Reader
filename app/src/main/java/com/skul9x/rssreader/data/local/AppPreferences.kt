@@ -2,6 +2,7 @@ package com.skul9x.rssreader.data.local
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.skul9x.rssreader.data.network.gemini.SummarizeModel
 
 enum class ScreenMode {
     AUTO,       // Tự động xoay theo cảm biến
@@ -16,6 +17,7 @@ class AppPreferences private constructor(context: Context) {
         private const val KEY_SCREEN_MODE = "screen_mode"
         private const val KEY_AUDIO_STREAM_MODE = "audio_stream_mode"
         private const val KEY_AUDIO_MIX_MODE = "audio_mix_mode"
+        private const val KEY_SELECTED_SUMMARIZE_MODEL = "selected_summarize_model"
         
         @Volatile
         private var instance: AppPreferences? = null
@@ -68,6 +70,20 @@ class AppPreferences private constructor(context: Context) {
         }
     }
 
+    // Summarize Model settings
+    fun setSelectedSummarizeModel(model: SummarizeModel) {
+        prefs.edit().putString(KEY_SELECTED_SUMMARIZE_MODEL, model.name).apply()
+    }
+
+    fun getSelectedSummarizeModel(): SummarizeModel {
+        val modelName = prefs.getString(KEY_SELECTED_SUMMARIZE_MODEL, SummarizeModel.GEMINI_2_5_FLASH_LITE.name)
+        return try {
+            SummarizeModel.valueOf(modelName ?: SummarizeModel.GEMINI_2_5_FLASH_LITE.name)
+        } catch (e: Exception) {
+            SummarizeModel.GEMINI_2_5_FLASH_LITE
+        }
+    }
+
     fun registerOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
         prefs.registerOnSharedPreferenceChangeListener(listener)
     }
@@ -85,6 +101,7 @@ class AppPreferences private constructor(context: Context) {
             Screen Mode: ${getScreenMode()}
             Audio Stream: ${getAudioStreamMode()}
             Audio Mix Mode: ${getAudioMixMode()}
+            Summarize Model: ${getSelectedSummarizeModel()}
             ============================
         """.trimIndent()
     }

@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.skul9x.rssreader.data.local.ApiKeyManager
 import com.skul9x.rssreader.data.local.AppDatabase
+import com.skul9x.rssreader.data.local.AppPreferences
 import com.skul9x.rssreader.data.local.NewsSummary
 import com.skul9x.rssreader.data.network.gemini.ApiResult
 import com.skul9x.rssreader.data.network.gemini.GeminiPrompts
@@ -52,6 +53,7 @@ class GeminiApiClient(context: Context) {
 
     private val apiKeyManager = ApiKeyManager.getInstance(context)
     private val newsSummaryDao = AppDatabase.getDatabase(context).newsSummaryDao()
+    private val appPreferences = AppPreferences.getInstance(context)
     
     // NEW: Quota Manager for tracking 429/503 errors
     private val quotaManager = ModelQuotaManager(context)
@@ -591,10 +593,20 @@ class GeminiApiClient(context: Context) {
         if (keys.isEmpty()) {
             return SummarizeResult.NoApiKeys
         }
+
+        // Get selected model from preferences
+        val selectedModelId = appPreferences.getSelectedSummarizeModel().modelId
+        
+        // Reorder MODELS list: prioritized selected model first, others follow
+        val prioritizedModels = MODELS.toMutableList().apply {
+            if (remove(selectedModelId)) {
+                add(0, selectedModelId)
+            }
+        }
         
         // Strategy: For each model, try ALL API keys before moving to next model
-        for (modelIndex in MODELS.indices) {
-            val model = MODELS[modelIndex]
+        for (model in prioritizedModels) {
+            val modelIndex = MODELS.indexOf(model) // Original index for state tracking
             
             for (keyIndex in keys.indices) {
                 val apiKey = keys[keyIndex]

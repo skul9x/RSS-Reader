@@ -1,47 +1,99 @@
-# RSS Reader
+# 📱 RSS Reader - Ứng dụng Theo dõi Tin tức Thông minh
 
-## Mô tả dự án
-RSS Reader là một ứng dụng đọc báo và theo dõi tin tức trực tuyến tiện lợi trên nền tảng Android. Ứng dụng hỗ trợ gom nhóm và tự động lấy tin (cache) từ các nguồn RSS feed để bạn có thể đọc offline bất kỳ lúc nào. Điểm nhấn của ứng dụng chính là tích hợp trí tuệ nhân tạo (Gemini) để tóm tắt các bài báo dài, cũng như hệ thống bóc tách nội dung thông minh (Readability4J) xử lý được cả các trang web không theo chuẩn cấu trúc.
+[![Build & Release APK](https://github.com/skul9x/RSS-Reader/actions/workflows/build.yml/badge.svg)](https://github.com/skul9x/RSS-Reader/actions/workflows/build.yml)
+[![Platform](https://img.shields.io/badge/Platform-Android-green.svg)](https://www.android.com/)
+[![Kotlin](https://img.shields.io/badge/Kotlin-1.9+-blue.svg)](https://kotlinlang.org/)
+[![Compose](https://img.shields.io/badge/Jetpack-Compose-orange.svg)](https://developer.android.com/jetpack/compose)
 
-## Mô tả công nghệ
-- **Nền tảng**: Android (Kotlin)
-- **Giao diện**: Jetpack Compose (Material 3)
-- **Cơ sở dữ liệu cục bộ**: SQLite thông qua thư viện Room
-- **Đồng bộ hóa / Backend**: Firebase (Auth, Firestore), WorkManager 
-- **AI Tóm tắt**: Google Gemini API (hỗ trợ mô hình Flash 2.5 và Flash 3.0 Lite)
-- **Xử lý nội dung (HTML/RSS)**: Jsoup, Readability4J (tổng hợp dữ liệu thông minh)
+**RSS Reader** là một ứng dụng di động mạnh mẽ và tinh tế trên nền tảng Android, giúp bạn quản lý và đọc tin tức từ hàng ngàn nguồn RSS feed khác nhau. Với sự hỗ trợ của trí tuệ nhân tạo, ứng dụng không chỉ đơn thuần là một trình đọc tin mà còn là một trợ lý thông tin thông minh.
 
-## Tính năng nổi bật
-- Đọc tin tức offline, đọc liên tục (Continuous reading).
-- Tóm tắt và dịch thuật bài báo với Gemini AI.
-- Hệ thống Fallback trích xuất thông minh đa tầng.
-- Tự động thay đổi tài khoản API (Model-First Rotation) giúp tiết kiệm quota.
+---
 
-## Hướng dẫn cài đặt
-1. Clone dự án về máy:
+## ✨ Tính năng nổi bật
+
+- 🚀 **Tóm tắt bằng AI**: Sử dụng Google Gemini (Flash 2.5/3.0 Lite) để tóm tắt nội dung các bài báo dài, giúp bạn nắm bắt ý chính chỉ trong vài giây.
+- 🌐 **Dịch thuật thông minh**: Tự động dịch các bài báo quốc tế sang tiếng Việt với độ chính xác cao.
+- 📶 **Đọc Offline**: Tự động cache nội dung bài viết để bạn có thể đọc mọi lúc, mọi nơi ngay cả khi không có mạng.
+- 📖 **Trải nghiệm đọc liền mạch**: Chế độ Continuous Reading giúp bạn đọc tin liên tục mà không bị gián đoạn.
+- 🛠️ **Bóc tách nội dung thông minh**: Tích hợp Readability4J và Jsoup để xử lý các trang web phức tạp, loại bỏ quảng cáo và các thành phần thừa.
+- 🔄 **Xoay vòng API Key**: Hệ thống Model-First Rotation giúp tối ưu hóa việc sử dụng quota API Gemini.
+
+---
+
+## 🛠️ Công nghệ sử dụng
+
+Ứng dụng được xây dựng trên những công nghệ hiện đại nhất:
+
+- **Ngôn ngữ**: [Kotlin](https://kotlinlang.org/) - Hiện đại, an toàn và hiệu quả.
+- **UI Framework**: [Jetpack Compose](https://developer.android.com/jetpack/compose) (Material 3) - Giao diện hiện đại, mượt mà.
+- **Database**: [Room Persistence](https://developer.android.com/training/data-storage/room) - Lưu trữ dữ liệu cục bộ mạnh mẽ.
+- **Backend/Services**: [Firebase](https://firebase.google.com/) (Auth, Firestore) & WorkManager.
+- **AI Engine**: [Google Gemini API](https://ai.google.dev/) - Trí tuệ nhân tạo hàng đầu.
+- **Networking**: [Retrofit](https://square.github.io/retrofit/) & [OkHttp](https://square.github.io/okhttp/).
+
+---
+
+## 🚀 Hướng dẫn cài đặt
+
+Để bắt đầu phát triển hoặc build ứng dụng, hãy làm theo các bước sau:
+
+1. **Clone Repository**:
    ```bash
    git clone https://github.com/skul9x/RSS-Reader.git
+   cd RSS-Reader
    ```
-2. Mở thư mục dự án bằng **Android Studio**.
-3. Thêm file cấu hình Firebase (`google-services.json`) vào thư mục `app/` nếu bạn muốn chạy tính năng đồng bộ.
-4. Xây dựng (build) và chạy (run) ứng dụng lên máy ảo (Emulator) hoặc thiết bị thật.
 
-## Cách sử dụng
-- Mở danh sách các kênh (Feeds), chọn một bài viết để đọc nội dung.
-- Dùng tính năng Tóm tắt hoặc Dịch bằng cách cấu hình API key cá nhân (Gemini) trong phần Settings.
-- Ứng dụng sẽ tự động tải các tin tức mới nhất thông qua dịch vụ chạy ngầm.
+2. **Cấu hình Firebase**:
+   - Tải file `google-services.json` từ dự án Firebase của bạn.
+   - Đặt file này vào thư mục `app/`.
 
-## Cấu trúc thư mục định hướng
-- `app/src/main/java/.../rssreader`: Thư mục mã nguồn chính.
-    - `/data`: Xử lý Database cục bộ (Room), Network API (Gemini), Parse RSS và bóc tách HTML (extractors).
-    - `/ui`: Xây dựng giao diện Compose (Screens, Components, Theme).
-    - `/service`: Dịch vụ ngầm tải/đọc tin liên tục.
-    - `/utils`: Các hàm tiện ích dùng chung (AppLogger, HtmlCleaner).
-- `docs/`: Tài liệu tham khảo, kịch bản specs và kế hoạch xây dựng kiến trúc mở rộng.
-- `.brain/`: Thư mục của hệ thống Antigravity lưu lại bối cảnh (context), trạng thái của các phiên làm việc và tài liệu dự án để tối ưu hóa quản lý AI.
+3. **Mở dự án**:
+   - Sử dụng **Android Studio (Iguana hoặc mới hơn)** để mở thư mục dự án.
+   - Đợi Gradle đồng bộ hóa các dependency.
 
-## Thông tin bổ sung
-Nếu tìm thấy lỗi hoặc có nhu cầu phát triển thêm, vui lòng tạo **Issue** hoặc **Pull Request** trực tiếp tại GitHub. 
+4. **Chạy ứng dụng**:
+   - Kết nối thiết bị Android hoặc khởi động Emulator.
+   - Nhấn **Run** (Shift + F10).
 
-## Bản quyền
+---
+
+## 📖 Cách sử dụng
+
+1. **Thêm nguồn tin**: Vào mục quản lý Feed để thêm các đường dẫn RSS bạn yêu thích.
+2. **Cấu hình AI**: Vào **Settings** -> nhập API Key Gemini của bạn để kích hoạt tính năng tóm tắt và dịch thuật.
+3. **Đọc tin**: Chọn bất kỳ bài viết nào, sử dụng biểu tượng 🤖 để tóm tắt hoặc biểu tượng 🌐 để dịch.
+
+---
+
+## 📂 Cấu trúc thư mục
+
+```text
+RSS-Reader/
+├── app/                  # Module chính của ứng dụng
+│   ├── src/main/java/... # Mã nguồn Kotlin
+│   │   ├── data/         # Repository, DAO, Network, Extractors
+│   │   ├── ui/           # Screens, Components, Theme (Compose)
+│   │   ├── service/      # Background Services (WorkManager)
+│   │   └── utils/        # Tiện ích (Logger, Cleaners)
+│   └── build.gradle.kts  # Cấu hình build module app
+├── .github/workflows/    # Cấu hình CI/CD (GitHub Actions)
+├── docs/                 # Tài liệu hướng dẫn và thiết kế
+└── gradle/               # Gradle wrapper và script
+```
+
+---
+
+## 📝 Thông tin bổ sung
+
+Chúng tôi luôn hoan nghênh các đóng góp từ cộng đồng. Nếu bạn phát hiện lỗi hoặc có ý tưởng mới, vui lòng:
+- Tạo một **Issue** để thảo luận.
+- Gửi **Pull Request** với những thay đổi của bạn.
+
+---
+
+## ⚖️ Bản quyền
+
 Copyright 2026 Nguyễn Duy Trường
+
+---
+*Phát triển bởi [Nguyễn Duy Trường](https://github.com/skul9x) với sự hỗ trợ từ Antigravity AI.*

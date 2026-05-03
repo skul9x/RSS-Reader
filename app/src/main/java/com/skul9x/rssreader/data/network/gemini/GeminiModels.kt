@@ -56,3 +56,13 @@ sealed class SuggestClassResult {
         }
     }
 }
+
+/**
+ * Available Gemini models for summarization.
+ */
+enum class SummarizeModel(val modelId: String, val displayName: String) {
+    GEMINI_2_5_FLASH_LITE("models/gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite"),
+    GEMINI_3_FLASH_PREVIEW("models/gemini-3-flash-preview", "Gemini 3 Flash Preview"),
+    GEMINI_3_1_FLASH_LITE_PREVIEW("models/gemini-3.1-flash-lite-preview", "Gemini 3.1 Flash Lite Preview"),
+    GEMINI_2_5_FLASH("models/gemini-2.5-flash", "Gemini 2.5 Flash")
+}

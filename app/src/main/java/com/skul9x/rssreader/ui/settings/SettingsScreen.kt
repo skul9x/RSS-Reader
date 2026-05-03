@@ -26,6 +26,7 @@ import com.skul9x.rssreader.auth.AuthManager
 import com.skul9x.rssreader.auth.AuthViewModel
 import com.skul9x.rssreader.data.local.ApiKeyManager
 import com.skul9x.rssreader.data.local.AppPreferences
+import com.skul9x.rssreader.data.network.gemini.SummarizeModel
 import com.skul9x.rssreader.ui.main.MainViewModel
 import com.skul9x.rssreader.utils.AppConfig
 
@@ -75,6 +76,10 @@ fun SettingsScreen(
     // State for audio settings
     var isAudioStreamExpanded by remember { mutableStateOf(false) }
     var isAudioMixExpanded by remember { mutableStateOf(false) }
+
+    // State for summarize model
+    var currentSummarizeModel by remember { mutableStateOf(appPreferences.getSelectedSummarizeModel()) }
+    var isSummarizeModelExpanded by remember { mutableStateOf(false) }
 
     // Auth ViewModel
     val authManager = remember { AuthManager.getInstance(context) }
@@ -203,6 +208,19 @@ fun SettingsScreen(
                     appPreferences.setScreenMode(mode)
                     onOrientationSettingChanged()
                     Toast.makeText(context, "Đã đổi chế độ màn hình", Toast.LENGTH_SHORT).show()
+                }
+            )
+
+            // Summarize Model section (expandable)
+            SummarizeModelSection(
+                currentModel = currentSummarizeModel,
+                isExpanded = isSummarizeModelExpanded,
+                onToggleExpand = { isSummarizeModelExpanded = !isSummarizeModelExpanded },
+                onModelSelected = { model ->
+                    currentSummarizeModel = model
+                    appPreferences.setSelectedSummarizeModel(model)
+                    isSummarizeModelExpanded = false
+                    Toast.makeText(context, "Đã đổi model tóm tắt: ${model.displayName}", Toast.LENGTH_SHORT).show()
                 }
             )
 
