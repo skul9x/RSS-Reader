@@ -1,29 +1,29 @@
 {
-  "updated_at": "2026-04-21T11:55:00Z",
+  "meta": { "schema_version": "1.1.0", "awf_version": "3.3.0" },
+  "updated_at": "2026-05-18T10:08:00Z",
   "working_on": {
-    "feature": "Readability4J Integration",
-    "task": "Completed all 4 phases of Readability4J integration and validation.",
+    "feature": "Dynamic Model Rotation & Quota Management",
+    "task": "Completed Phase 4: Integration testing, robust failed-fast simulation, time simulation, and build installation.",
     "status": "complete",
-    "files": ["ContentExtractorRegistry.kt", "ReadabilityExtractor.kt", "proguard-rules.pro"],
+    "files": ["ModelQuotaManager.kt", "GeminiApiClient.kt", "DynamicModelRotationIntegrationTest.kt", "build.gradle.kts", "libs.versions.toml", "phase-04-testing.md"],
     "blockers": [],
-    "notes": "Added smart content extraction for unknown sites. Optimized ProGuard for SLF4J."
+    "notes": "Successfully implemented the failure recovery strategy for 429 and 503, wrote all robust integration tests using MockWebServer, solved JVM stack overflow issues by injecting timeProvider, and installed the debug app to device."
   },
   "pending_tasks": [
-    { "task": "Evaluate translation model efficiency", "priority": "medium", "notes": "Check if gemma-3-1b-it is truly sufficient for all content" },
-    { "task": "Phase 5: Performance Optimization", "priority": "medium", "notes": "Profile and optimize if needed" }
+    { "task": "Profile memory usage of GeminiApiClient under high-concurrency rotation", "priority": "low", "notes": "Verify if HTTP client connections are properly reused and released." }
   ],
   "recent_changes": [
-    { "timestamp": "2026-04-21T11:50:00Z", "type": "config", "description": "Phase 4: Validated R8/ProGuard release build successfully after adding dontwarn rules for SLF4J.", "files": ["proguard-rules.pro"] },
-    { "timestamp": "2026-04-21T11:45:00Z", "type": "enhancement", "description": "Phase 3: Integrated ReadabilityExtractor into ContentExtractorRegistry pipeline between site-specific and generic fallbacks.", "files": ["ContentExtractorRegistry.kt"] },
-    { "timestamp": "2026-04-21T11:40:00Z", "type": "feature", "description": "Phase 2: Created ReadabilityExtractor wrapper with Vietnamese encoding support and navigation-heavy detection.", "files": ["ReadabilityExtractor.kt", "ReadabilityExtractorTest.kt"] },
-    { "timestamp": "2026-04-21T11:35:00Z", "type": "dependency", "description": "Phase 1: Added readability4j 1.0.8 dependency and version catalog entries.", "files": ["build.gradle.kts", "libs.versions.toml"] }
+    { "timestamp": "2026-05-18T10:05:00Z", "type": "deployment", "description": "Installed the assembled debug APK onto connected physical Android device (OP5D3BL1) and auto-launched it.", "files": ["app-debug.apk"] },
+    { "timestamp": "2026-05-18T03:01:00Z", "type": "testing", "description": "Phase 4: Created DynamicModelRotationIntegrationTest.kt, simulating 429 block, 503 cooldown, full outage and self-healing. Implemented timeProvider in ModelQuotaManager to bypass JVM MockK System stack overflow issues.", "files": ["DynamicModelRotationIntegrationTest.kt", "ModelQuotaManager.kt"] },
+    { "timestamp": "2026-05-18T02:50:00Z", "type": "feature", "description": "Phase 2 & 3: Implemented dynamic rotation priority logic. Modified GeminiApiClient to support local baseUrl routing and Singleton ModelQuotaManager sharing.", "files": ["GeminiApiClient.kt", "ModelQuotaManager.kt"] },
+    { "timestamp": "2026-05-18T02:40:00Z", "type": "config", "description": "Phase 1: Added okhttp-mockwebserver dependency to build catalog and module gradle dependencies.", "files": ["build.gradle.kts", "libs.versions.toml"] }
   ],
   "errors_encountered": [
-    { "error": "R8 Build failed due to missing org.slf4j.impl.StaticLoggerBinder", "solution": "Added -dontwarn org.slf4j.** to proguard-rules.pro", "resolved": true },
-    { "error": "Unit tests failing due to short content length", "solution": "Increased test HTML length to > 500 characters to pass ReadabilityExtractor thresholds.", "resolved": true }
+    { "error": "MockK static System.currentTimeMillis() mocking causes infinite loop and StackOverflowError in JVM", "solution": "Introduced lambda timeProvider variable in ModelQuotaManager, allowing safe test injection of custom simulated clock.", "resolved": true },
+    { "error": "MockWebServer classes unresolved during test compilation", "solution": "Added okhttp-mockwebserver dependency to build catalog and gradle script.", "resolved": true }
   ],
   "decisions_made": [
-    { "decision": "Priority order: Custom > Site-Specific > Readability > Generic", "reason": "Ensures accuracy for known sites while providing smart extraction for unknown ones." },
-    { "decision": "Ignore SLF4J warnings in ProGuard", "reason": "Readability4J uses it for logging which is not essential for core functionality on Android." }
+    { "decision": "Inject timeProvider rather than mocking static JVM classes", "reason": "Bypasses modern JVM security/mocking limitations and yields robust, testable design." },
+    { "decision": "Enable dynamic baseUrl in GeminiApiClient", "reason": "Allows clean redirection to MockWebServer local address without mutating global static variables." }
   ]
 }

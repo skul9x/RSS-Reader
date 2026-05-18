@@ -2,37 +2,37 @@
 📋 HANDOVER DOCUMENT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📍 Đang làm: Firebase Sync Subsystem Fixes
-🔢 Đến bước: Hoàn thành Audit & Fix Bugs (High/Medium)
+📍 Đang làm: Universal Dynamic Multi-Model API Rotation & Quota Management
+🔢 Đến bước: Hoàn tất 100% Phase 4 (Coding + Testing + Device Deployment)
 
 ✅ ĐÃ XONG:
-   - [BUG 3] Fixed Polling Loop (High)
-   - [BUG 4] Unique Work for Immediate Sync (High)
-   - [BUG 8] Sign-out State Cleanup (High)
-   - [BUG 2] Batch DB Writes (Medium)
-   - [BUG 5] applicationScope for Background Flush (Medium)
-   - [BUG 6] Timestamp Precision (>= 1ms buffer) (Medium)
-   - [BUG 10] Recovery Logic Simplification (Medium)
-   - All fixes verified with `SyncCoordinatorTest`.
+   - Phase 01: Setup okhttp-mockwebserver dependency ✓
+   - Phase 02: Core rotation logic in ModelQuotaManager & model restoration ✓
+   - Phase 03: Fault-tolerant integration & error states in GeminiApiClient ✓
+   - Phase 04: Robust integration testing (DynamicModelRotationIntegrationTest.kt) ✓
+   - Device Deployment: Build debug APK, install on connected physical device (OP5D3BL1) and launch it successfully ✓
 
 ⏳ CÒN LẠI:
-   - [BUG 1] Remove redundant PENDING check in SQL (Low)
-   - [UI] Thêm Sync Indicator (xoay xoay) khi app đang đẩy data (Feature)
+   - Monitor and profile memory usage of GeminiApiClient under high concurrency (Low priority)
+   - Evaluate long-term performance and behavior of model fallbacks in practical use
 
 🔧 QUYẾT ĐỊNH QUAN TRỌNG:
-   - Ưu tiên "Earliest Wins" cho Read Status (Conflict Resolution).
-   - Chunking Firestore upload/delete ở mức 400 items.
-   - Hashing API keys (SHA-256) trước khi lưu.
+   - Sử dụng lambda timeProvider trong ModelQuotaManager thay vì MockK static mocking để tránh JVM stack overflows.
+   - Thêm dynamic baseUrl vào GeminiApiClient để hướng API request về MockWebServer trong quá trình test.
+   - 429 block combo (Model + API Key) kéo dài 30 tiếng và được ghi lưu liên tục qua SharedPreferences.
+   - 503 cooldown combo kéo dài 5 phút và được lưu trữ tạm thời trong RAM.
 
 ⚠️ LƯU Ý CHO SESSION SAU:
-   - Mọi logic đồng bộ giờ đây tập trung tại `SyncCoordinator`.
-   - `SyncWorker` chỉ gọi `performFullSync()` (WorkManager lo retry).
-   - Đăng xuất sẽ reset toàn bộ Singletons via `RssApplication.onUserSignOut`.
+   - Đã kiểm tra và vượt qua toàn bộ 4 kịch bản tích hợp và khả năng tự chữa lành (Self-healing).
+   - Ứng dụng debug đã được cài đặt và đang chạy trực tiếp trên thiết bị Android của user.
+   - Các files cấu hình test nằm tại DynamicModelRotationIntegrationTest.kt.
 
 📁 FILES QUAN TRỌNG:
-   - `SyncCoordinator.kt`: Trái tim của hệ thống sync.
-   - `ReadNewsDao.kt`: Chứa Batch Upsert logic.
-   - `.brain/session.json`: Progress hiện tại.
+   - `ModelQuotaManager.kt`: Quản lý quota và cooldown.
+   - `GeminiApiClient.kt`: Xử lý HTTP request và xoay vòng model khi lỗi xảy ra.
+   - `DynamicModelRotationIntegrationTest.kt`: Test suite chứa các kịch bản lỗi giả định.
+   - `.brain/brain.json`: Dữ liệu tĩnh bộ nhớ dự án.
+   - `.brain/session.json`: Tiến độ phiên hiện tại.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📍 Đã lưu! Để tiếp tục: Gõ /recap

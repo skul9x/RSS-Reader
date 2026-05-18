@@ -5,6 +5,7 @@ import android.util.Log
 import com.skul9x.rssreader.data.local.ApiKeyManager
 import com.skul9x.rssreader.data.local.AppDatabase
 import com.skul9x.rssreader.data.local.AppPreferences
+import com.skul9x.rssreader.data.local.ModelManager
 import com.skul9x.rssreader.data.local.NewsSummary
 import com.skul9x.rssreader.data.network.gemini.ApiResult
 import com.skul9x.rssreader.data.network.gemini.GeminiPrompts
@@ -36,7 +37,7 @@ import kotlin.coroutines.resumeWithException
  * 
  * Thread-safe implementation using Mutex for coroutine synchronization.
  */
-class GeminiApiClient(context: Context) {
+class GeminiApiClient(private val context: Context) {
 
     companion object {
         private const val TAG = "GeminiApiClient"
@@ -56,7 +57,14 @@ class GeminiApiClient(context: Context) {
     private val appPreferences = AppPreferences.getInstance(context)
     
     // NEW: Quota Manager for tracking 429/503 errors
-    private val quotaManager = ModelQuotaManager(context)
+    private val quotaManager = ModelQuotaManager.getInstance(context)
+
+    @Volatile
+    private var baseUrl: String = BASE_URL
+
+    fun setBaseUrlForTesting(url: String) {
+        baseUrl = url
+    }
     
     // Mutex for thread-safe access to mutable state
     private val stateMutex = Mutex()
@@ -73,6 +81,38 @@ class GeminiApiClient(context: Context) {
     private var currentApiKeyIndex = 0
     @Volatile
     private var currentModelIndex = 0
+    @Volatile
+    private var currentModelId = ""
+
+    /**
+     * Retrieves the dynamic model list from ModelManager sorted using active model-first strategy.
+     * thread-safe & runs on IO dispatcher to avoid blocking main thread.
+     */
+    suspend fun getSortedPriorityModels(): List<String> = withContext(Dispatchers.IO) {
+        val allModels = ModelManager.getInstance(context).getModels().map { it.modelId }
+        val activeModel = appPreferences.getSelectedModelId()
+        
+        if (allModels.contains(activeModel)) {
+            val remaining = allModels.filter { it != activeModel }
+            listOf(activeModel) + remaining
+        } else {
+            allModels
+        }
+    }
+
+    /**
+     * Generates a 8-character SHA-256 hash of the API key for log monitoring.
+     */
+    private fun getHashedKey(apiKey: String): String {
+        return try {
+            java.security.MessageDigest.getInstance("SHA-256")
+                .digest(apiKey.toByteArray())
+                .take(8)
+                .joinToString("") { "%02x".format(it) }
+        } catch (e: Exception) {
+            apiKey.hashCode().toString()
+        }
+    }
 
     /**
      * Refresh API keys from storage (call after user adds/removes keys).
@@ -180,60 +220,65 @@ class GeminiApiClient(context: Context) {
             for (model in translationModels) {
                 for (keyIndex in keys.indices) {
                     val apiKey = keys[keyIndex]
+                    val hashedKey = getHashedKey(apiKey)
                     
                     if (!quotaManager.isAvailable(model, apiKey)) {
+                        Log.d(TAG, "Translation: Skipping Model: $model | API key: $hashedKey (Blocked/Cooldown)")
                         continue
                     }
 
                     try {
-                        Log.d(TAG, "Trying translation: $model with API key ${keyIndex + 1}/${keys.size}")
+                        Log.d(TAG, "Trying translation: $model with API key: $hashedKey (Attempt ${keyIndex + 1}/${keys.size})")
                         val translationPrompt = GeminiPrompts.buildTranslationPrompt(text)
                         val result = tryTranslate(apiKey, model, translationPrompt, useJsonMode = false)
                         
                         when (result) {
                             is ApiResult.Success -> {
-                                Log.d(TAG, "Translation successful: $model | API ${keyIndex + 1}")
-                                stateMutex.withLock { currentApiKeyIndex = keyIndex }
+                                Log.d(TAG, "Translation SUCCESS: $model | API key: $hashedKey")
+                                stateMutex.withLock { 
+                                    currentApiKeyIndex = keyIndex 
+                                    currentModelId = model
+                                }
                                 return@withContext result.text
                             }
                             is ApiResult.QuotaExceeded -> {
-                                Log.w(TAG, "Quota exceeded (429): $model | API ${keyIndex + 1}")
+                                Log.w(TAG, "Translation: Quota exceeded (429): $model | API key: $hashedKey | Action: Blocking for 30 hours")
                                 ActivityLogger.logGeminiFallback(
                                     url = "", 
                                     reason = "Quota Exceeded (429)", 
-                                    fromModel = "$model (Key ${keyIndex + 1})"
+                                    fromModel = "$model (Key: $hashedKey)"
                                 )
                                 quotaManager.markExhausted(model, apiKey)
                                 continue 
                             }
                             is ApiResult.ServerBusy -> {
-                                Log.w(TAG, "Server busy (503): $model | API ${keyIndex + 1}")
+                                Log.w(TAG, "Translation: Server busy (503): $model | API key: $hashedKey | Action: Cooldown for 5 minutes")
                                 ActivityLogger.logGeminiFallback(
                                     url = "", 
                                     reason = "Server Busy (503)", 
-                                    fromModel = "$model (Key ${keyIndex + 1})"
+                                    fromModel = "$model (Key: $hashedKey)"
                                 )
                                 quotaManager.markCooldown(model, apiKey)
                                 continue
                             }
                             is ApiResult.NetworkError -> {
-                                Log.w(TAG, "Network error detected, stopping all retries")
+                                Log.w(TAG, "Translation: Network error detected with model: $model | API key: $hashedKey, stopping all retries")
                                 ActivityLogger.log(
                                     eventType = "TRANSLATE_ABORT",
                                     url = "",
                                     message = "Dừng dịch - Lỗi mạng",
-                                    details = "Model: $model | API ${keyIndex + 1}",
+                                    details = "Model: $model | API key: $hashedKey",
                                     isError = true
                                 )
                                 return@withContext text  // Trả về text gốc ngay lập tức
                             }
                             else -> {
-                                Log.w(TAG, "Translation failed: $model | API ${keyIndex + 1}, trying next...")
+                                Log.w(TAG, "Translation failed: $model | API key: $hashedKey, trying next...")
                                 continue
                             }
                         }
                     } catch (e: Exception) {
-                        Log.e(TAG, "Translation exception: $model | API ${keyIndex + 1}", e)
+                        Log.e(TAG, "Translation exception: $model | API key: $hashedKey", e)
                         continue
                     }
                 }
@@ -285,12 +330,15 @@ class GeminiApiClient(context: Context) {
             for (model in translationModels) {
                 for (keyIndex in keys.indices) {
                     val apiKey = keys[keyIndex]
+                    val hashedKey = getHashedKey(apiKey)
+                    
                     if (!quotaManager.isAvailable(model, apiKey)) {
+                        Log.d(TAG, "Batch Translation: Skipping Model: $model | API key: $hashedKey (Blocked/Cooldown)")
                         continue
                     }
 
                     try {
-                        Log.d(TAG, "Trying batch translation: $model | API ${keyIndex + 1}")
+                        Log.d(TAG, "Trying batch translation: $model | API key: $hashedKey (Attempt ${keyIndex + 1}/${keys.size})")
                         val result = tryTranslate(apiKey, model, prompt, useJsonMode = true)
                         
                         when (result) {
@@ -301,7 +349,7 @@ class GeminiApiClient(context: Context) {
                                     val resultMap = parsed.entries.associate { (k, v) ->
                                         k to v.jsonPrimitive.content
                                     }
-                                    Log.d(TAG, "Batch translation success: ${resultMap.size} items")
+                                    Log.d(TAG, "Batch translation SUCCESS: ${resultMap.size} items | Model: $model | API key: $hashedKey")
                                     return@withContext resultMap
                                 } catch (e: Exception) {
                                     Log.e(TAG, "Failed to parse batch response: ${result.text.take(200)}", e)
@@ -309,34 +357,36 @@ class GeminiApiClient(context: Context) {
                                 }
                             }
                             is ApiResult.QuotaExceeded -> {
+                                Log.w(TAG, "Batch Translation: Quota exceeded (429): $model | API key: $hashedKey | Action: Blocking for 30 hours")
                                 ActivityLogger.logGeminiFallback(
                                     url = "BATCH_TITLE_TRANSLATION", 
                                     reason = "Quota Exceeded (429)", 
-                                    fromModel = "$model (Key ${keyIndex + 1})"
+                                    fromModel = "$model (Key: $hashedKey)"
                                 )
                                 quotaManager.markExhausted(model, apiKey)
                                 continue
                             }
                             is ApiResult.ServerBusy -> {
+                                Log.w(TAG, "Batch Translation: Server busy (503): $model | API key: $hashedKey | Action: Cooldown for 5 minutes")
                                 ActivityLogger.logGeminiFallback(
                                     url = "BATCH_TITLE_TRANSLATION", 
                                     reason = "Server Busy (503)", 
-                                    fromModel = "$model (Key ${keyIndex + 1})"
+                                    fromModel = "$model (Key: $hashedKey)"
                                 )
                                 quotaManager.markCooldown(model, apiKey)
                                 continue
                             }
                             is ApiResult.NetworkError -> {
-                                Log.w(TAG, "Network error, aborting batch translation")
+                                Log.w(TAG, "Batch Translation: Network error with model: $model | API key: $hashedKey, aborting batch translation")
                                 return@withContext emptyMap()
                             }
                             else -> continue
                         }
                     } catch (e: java.io.IOException) {
-                        Log.e(TAG, "Batch translation network error, aborting", e)
+                        Log.e(TAG, "Batch translation network error with model: $model | API key: $hashedKey, aborting", e)
                         return@withContext emptyMap()
                     } catch (e: Exception) {
-                        Log.e(TAG, "Batch translation exception: $model | API ${keyIndex + 1}", e)
+                        Log.e(TAG, "Batch translation exception with model: $model | API key: $hashedKey", e)
                         continue
                     }
                 }
@@ -443,7 +493,7 @@ class GeminiApiClient(context: Context) {
             val requestBody = GeminiResponseHelper.buildRequestBody(prompt, model, useJsonMode = useJsonMode)
             
             val request = Request.Builder()
-                .url("$BASE_URL/$model:generateContent?key=$apiKey")
+                .url("$baseUrl/$model:generateContent?key=$apiKey")
                 .post(requestBody.toRequestBody("application/json".toMediaType()))
                 .build()
 
@@ -451,7 +501,7 @@ class GeminiApiClient(context: Context) {
                 eventType = "TRANSLATE_HTTP",
                 url = "",
                 message = "Gửi request dịch",
-                details = "URL: $BASE_URL/$model",
+                details = "URL: $baseUrl/$model",
                 isError = false
             )
             
@@ -594,31 +644,26 @@ class GeminiApiClient(context: Context) {
             return SummarizeResult.NoApiKeys
         }
 
-        // Get selected model from preferences
-        val selectedModelId = appPreferences.getSelectedSummarizeModel().modelId
-        
-        // Reorder MODELS list: prioritized selected model first, others follow
-        val prioritizedModels = MODELS.toMutableList().apply {
-            if (remove(selectedModelId)) {
-                add(0, selectedModelId)
-            }
-        }
+        // Get dynamically sorted prioritized models
+        val prioritizedModels = getSortedPriorityModels()
         
         // Strategy: For each model, try ALL API keys before moving to next model
         for (model in prioritizedModels) {
-            val modelIndex = MODELS.indexOf(model) // Original index for state tracking
+            val modelIndex = prioritizedModels.indexOf(model) // Tracking index for backwards compatibility
             
             for (keyIndex in keys.indices) {
                 val apiKey = keys[keyIndex]
+                val hashedKey = getHashedKey(apiKey)
                 
                 // Check availability first
                 if (!quotaManager.isAvailable(model, apiKey)) {
+                    Log.d(TAG, "Summarize: Skipping Model: $model | API key: $hashedKey (Blocked/Cooldown)")
                     continue
                 }
                 
-                Log.d(TAG, "Trying Model: $model | API key ${keyIndex + 1}/${keys.size}")
+                Log.d(TAG, "Trying Model: $model | API key: $hashedKey (Attempt ${keyIndex + 1}/${keys.size})")
 
-                ActivityLogger.logGeminiStart(url, "$model (Key ${keyIndex + 1})")
+                ActivityLogger.logGeminiStart(url, "$model (Key: $hashedKey)")
 
                 val result = tryGenerateContent(apiKey, model, content)
 
@@ -628,41 +673,42 @@ class GeminiApiClient(context: Context) {
                         stateMutex.withLock {
                             currentApiKeyIndex = keyIndex
                             currentModelIndex = modelIndex
+                            currentModelId = model
                         }
-                        Log.d(TAG, "Summarize SUCCESS: $model | API key ${keyIndex + 1}")
-                        ActivityLogger.logGeminiSuccess(url, result.text, "$model (Key ${keyIndex + 1})")
+                        Log.d(TAG, "Summarize SUCCESS: $model | API key: $hashedKey")
+                        ActivityLogger.logGeminiSuccess(url, result.text, "$model (Key: $hashedKey)")
                         return SummarizeResult.Success(result.text, model)
                     }
                     is ApiResult.QuotaExceeded -> {
-                        Log.w(TAG, "Quota exceeded (429): $model | API key ${keyIndex + 1}")
+                        Log.w(TAG, "Summarize: Quota exceeded (429): $model | API key: $hashedKey | Action: Blocking for 30 hours")
                         ActivityLogger.logGeminiFallback(
                             url = "SUMMARIZE", 
                             reason = "Quota Exceeded (429)", 
-                            fromModel = "$model (Key ${keyIndex + 1})"
+                            fromModel = "$model (Key: $hashedKey)"
                         )
                         quotaManager.markExhausted(model, apiKey)
                         continue 
                     }
                     is ApiResult.ServerBusy -> {
-                        Log.w(TAG, "Server busy (503): $model | API key ${keyIndex + 1}")
+                        Log.w(TAG, "Summarize: Server busy (503): $model | API key: $hashedKey | Action: Cooldown for 5 minutes")
                         ActivityLogger.logGeminiFallback(
                             url = "SUMMARIZE", 
                             reason = "Server Busy (503)", 
-                            fromModel = "$model (Key ${keyIndex + 1})"
+                            fromModel = "$model (Key: $hashedKey)"
                         )
                         quotaManager.markCooldown(model, apiKey)
                         continue
                     }
                     is ApiResult.ModelNotFound -> {
-                        Log.w(TAG, "Model not found: $model, skipping to next model...")
+                        Log.w(TAG, "Summarize: Model not found: $model, skipping to next model...")
                         break 
                     }
                     is ApiResult.Error -> {
-                        Log.e(TAG, "API error: ${result.message} | $model | API key ${keyIndex + 1}")
+                        Log.e(TAG, "Summarize: API error: ${result.message} | Model: $model | API key: $hashedKey")
                         continue 
                     }
                     is ApiResult.NetworkError -> {
-                        Log.w(TAG, "Network error during summarization, aborting")
+                        Log.w(TAG, "Summarize: Network error during summarization, aborting all retries")
                         return SummarizeResult.Error("Lỗi kết nối mạng")
                     }
                 }
@@ -678,18 +724,22 @@ class GeminiApiClient(context: Context) {
     private suspend fun suggestWithRetry(rawHtml: String): SuggestClassResult {
         val keys = stateMutex.withLock { apiKeys.toList() }
         if (keys.isEmpty()) return SuggestClassResult.NoApiKeys
+ 
+        val prioritizedModels = getSortedPriorityModels()
 
         // MODEL-FIRST strategy: try same model across all keys first
-        for (modelIndex in MODELS.indices) {
-            val model = MODELS[modelIndex]
+        for (model in prioritizedModels) {
+            val modelIndex = prioritizedModels.indexOf(model)
             for (keyIndex in keys.indices) {
                 val apiKey = keys[keyIndex]
+                val hashedKey = getHashedKey(apiKey)
                 
                 if (!quotaManager.isAvailable(model, apiKey)) {
+                    Log.d(TAG, "SuggestClass: Skipping Model: $model | API key: $hashedKey (Blocked/Cooldown)")
                     continue
                 }
 
-                Log.d(TAG, "SuggestClass: Trying Model: $model | API key ${keyIndex + 1}/${keys.size}")
+                Log.d(TAG, "SuggestClass: Trying Model: $model | API key: $hashedKey (Attempt ${keyIndex + 1}/${keys.size})")
                 val result = trySuggestContent(apiKey, model, rawHtml)
 
                 when (result) {
@@ -697,23 +747,25 @@ class GeminiApiClient(context: Context) {
                         stateMutex.withLock {
                             currentApiKeyIndex = keyIndex
                             currentModelIndex = modelIndex
+                            currentModelId = model
                         }
+                        Log.d(TAG, "SuggestClass SUCCESS: $model | API key: $hashedKey")
                         return SuggestClassResult.Success(result.text.trim(), model)
                     }
                     is ApiResult.QuotaExceeded -> {
-                        Log.w(TAG, "SuggestClass: Quota exceeded (429) for $model")
+                        Log.w(TAG, "SuggestClass: Quota exceeded (429): $model | API key: $hashedKey | Action: Blocking for 30 hours")
                         quotaManager.markExhausted(model, apiKey)
                     }
                     is ApiResult.ServerBusy -> {
-                        Log.w(TAG, "SuggestClass: Server busy (503) for $model")
+                        Log.w(TAG, "SuggestClass: Server busy (503): $model | API key: $hashedKey | Action: Cooldown for 5 minutes")
                         quotaManager.markCooldown(model, apiKey)
                     }
                     is ApiResult.ModelNotFound -> {
-                        Log.w(TAG, "SuggestClass: Model not found: $model")
+                        Log.w(TAG, "SuggestClass: Model not found: $model, skipping to next model...")
                         break // Try next model
                     }
                     is ApiResult.Error -> {
-                        Log.e(TAG, "SuggestClass: API error: ${result.message}")
+                        Log.e(TAG, "SuggestClass: API error: ${result.message} | Model: $model | API key: $hashedKey")
                     }
                     is ApiResult.NetworkError -> {
                         Log.w(TAG, "SuggestClass: Network error, aborting suggestion")
@@ -746,7 +798,7 @@ class GeminiApiClient(context: Context) {
             val requestBody = GeminiResponseHelper.buildRequestBody(prompt, model)
             
             val request = Request.Builder()
-                .url("$BASE_URL/$model:generateContent?key=$apiKey")
+                .url("$baseUrl/$model:generateContent?key=$apiKey")
                 .post(requestBody.toRequestBody("application/json".toMediaType()))
                 .build()
 
@@ -828,6 +880,7 @@ class GeminiApiClient(context: Context) {
         val keys = apiKeys
         val keyIndex = currentApiKeyIndex
         val modelIndex = currentModelIndex
+        val activeModel = currentModelId
         
         if (keys.isEmpty()) {
             return "Chưa có API key"
@@ -835,9 +888,11 @@ class GeminiApiClient(context: Context) {
         
         // Safe bounds check
         val safeKeyIndex = if (keyIndex < keys.size) keyIndex else 0
-        val safeModelIndex = if (modelIndex < MODELS.size) modelIndex else 0
+        val displayModel = activeModel.ifBlank {
+            if (modelIndex < MODELS.size) MODELS[modelIndex] else "Không rõ"
+        }
         
-        return "API ${safeKeyIndex + 1}/${keys.size}, Model: ${MODELS[safeModelIndex]}"
+        return "API ${safeKeyIndex + 1}/${keys.size}, Model: $displayModel"
     }
 
     // Suspend version for detailed status
@@ -845,16 +900,19 @@ class GeminiApiClient(context: Context) {
         val keys = apiKeys
         val keyIndex = currentApiKeyIndex
         val modelIndex = currentModelIndex
+        val activeModel = currentModelId
         
         if (keys.isEmpty()) return "Chưa có API key"
         
         val safeKeyIndex = if (keyIndex < keys.size) keyIndex else 0
-        val safeModelIndex = if (modelIndex < MODELS.size) modelIndex else 0
+        val displayModel = activeModel.ifBlank {
+            if (modelIndex < MODELS.size) MODELS[modelIndex] else "Không rõ"
+        }
         
         val exhausted = quotaManager.getExhaustedCount()
         val cooldown = quotaManager.getCooldownCount()
         
-        return "API ${safeKeyIndex + 1}/${keys.size} | Model: ${MODELS[safeModelIndex]}\nBlocked: $exhausted | Cooldown: $cooldown"
+        return "API ${safeKeyIndex + 1}/${keys.size} | Model: $displayModel\nBlocked: $exhausted | Cooldown: $cooldown"
     }
 
     /**
@@ -890,7 +948,7 @@ class GeminiApiClient(context: Context) {
             val requestBody = GeminiResponseHelper.buildRequestBody(prompt, model)
 
             val request = Request.Builder()
-                .url("$BASE_URL/$model:generateContent?key=$apiKey")
+                .url("$baseUrl/$model:generateContent?key=$apiKey")
                 .post(requestBody.toRequestBody("application/json".toMediaType()))
                 .build()
 

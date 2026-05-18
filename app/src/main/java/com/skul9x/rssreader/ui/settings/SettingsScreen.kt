@@ -26,9 +26,12 @@ import com.skul9x.rssreader.auth.AuthManager
 import com.skul9x.rssreader.auth.AuthViewModel
 import com.skul9x.rssreader.data.local.ApiKeyManager
 import com.skul9x.rssreader.data.local.AppPreferences
+import com.skul9x.rssreader.data.local.ModelManager
+import com.skul9x.rssreader.data.network.gemini.DynamicModel
 import com.skul9x.rssreader.data.network.gemini.SummarizeModel
 import com.skul9x.rssreader.ui.main.MainViewModel
 import com.skul9x.rssreader.utils.AppConfig
+import kotlinx.coroutines.launch
 
 /**
  * Main Settings screen with navigation to RSS Feeds, API Keys management, and Screen Mode settings.
@@ -78,8 +81,15 @@ fun SettingsScreen(
     var isAudioMixExpanded by remember { mutableStateOf(false) }
 
     // State for summarize model
-    var currentSummarizeModel by remember { mutableStateOf(appPreferences.getSelectedSummarizeModel()) }
+    val modelManager = remember { ModelManager.getInstance(context) }
+    val coroutineScope = rememberCoroutineScope()
+    var dynamicModels by remember { mutableStateOf<List<DynamicModel>>(emptyList()) }
+    var currentModelId by remember { mutableStateOf(appPreferences.getSelectedModelId()) }
     var isSummarizeModelExpanded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        dynamicModels = modelManager.getModels()
+    }
 
     // Auth ViewModel
     val authManager = remember { AuthManager.getInstance(context) }
@@ -213,14 +223,67 @@ fun SettingsScreen(
 
             // Summarize Model section (expandable)
             SummarizeModelSection(
-                currentModel = currentSummarizeModel,
+                currentModelId = currentModelId,
+                models = dynamicModels,
                 isExpanded = isSummarizeModelExpanded,
                 onToggleExpand = { isSummarizeModelExpanded = !isSummarizeModelExpanded },
-                onModelSelected = { model ->
-                    currentSummarizeModel = model
-                    appPreferences.setSelectedSummarizeModel(model)
+                onModelSelected = { modelId ->
+                    currentModelId = modelId
+                    appPreferences.setSelectedModelId(modelId)
                     isSummarizeModelExpanded = false
-                    Toast.makeText(context, "Đã đổi model tóm tắt: ${model.displayName}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Đã đổi model tóm tắt: $modelId", Toast.LENGTH_SHORT).show()
+                },
+                onAddModel = { modelId, displayName ->
+                    coroutineScope.launch {
+                        val success = modelManager.addModel(modelId, displayName)
+                        if (success) {
+                            dynamicModels = modelManager.getModels()
+                            Toast.makeText(context, "Đã thêm mô hình: $displayName", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "Không thể thêm mô hình! ID trùng lặp hoặc không hợp lệ.", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
+                onDeleteModel = { modelId ->
+                    if (modelId == currentModelId) {
+                        Toast.makeText(context, "Không thể xóa mô hình đang hoạt động!", Toast.LENGTH_SHORT).show()
+                    } else {
+                        coroutineScope.launch {
+                            val success = modelManager.removeModel(modelId)
+                            if (success) {
+                                dynamicModels = modelManager.getModels()
+                                Toast.makeText(context, "Đã xóa mô hình", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                },
+                onUpdateModel = { oldModelId, newModelId, newDisplayName ->
+                    coroutineScope.launch {
+                        val success = modelManager.updateModel(oldModelId, newModelId, newDisplayName)
+                        if (success) {
+                            dynamicModels = modelManager.getModels()
+                            if (currentModelId == oldModelId) {
+                                currentModelId = newModelId
+                                appPreferences.setSelectedModelId(newModelId)
+                            }
+                            Toast.makeText(context, "Đã cập nhật mô hình", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "Không thể cập nhật mô hình! ID trùng lặp hoặc không hợp lệ.", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
+                onResetDefaults = {
+                    coroutineScope.launch {
+                        modelManager.resetToDefaults()
+                        dynamicModels = modelManager.getModels()
+                        val activeExists = dynamicModels.any { it.modelId == currentModelId }
+                        if (!activeExists && dynamicModels.isNotEmpty()) {
+                            val firstModelId = dynamicModels.first().modelId
+                            currentModelId = firstModelId
+                            appPreferences.setSelectedModelId(firstModelId)
+                        }
+                        Toast.makeText(context, "Đã khôi phục các mô hình mặc định", Toast.LENGTH_SHORT).show()
+                    }
                 }
             )
 

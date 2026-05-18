@@ -17,6 +17,7 @@ class AppPreferencesTest {
 
     @Before
     fun setup() {
+        every { context.applicationContext } returns context
         every { context.getSharedPreferences("app_settings", Context.MODE_PRIVATE) } returns sharedPrefs
         every { sharedPrefs.edit() } returns editor
         every { editor.putString(any(), any()) } returns editor
@@ -30,18 +31,28 @@ class AppPreferencesTest {
     }
 
     @Test
-    fun `setSelectedSummarizeModel should save the model name to shared preferences`() {
+    fun `setSelectedSummarizeModel should save the model id to shared preferences`() {
         val model = SummarizeModel.GEMINI_3_FLASH_PREVIEW
         
         appPreferences.setSelectedSummarizeModel(model)
         
-        // Verify that it calls putString with the correct key and model name
-        verify { editor.putString("selected_summarize_model", model.name) }
+        // Verify that it calls putString with the correct key and model ID
+        verify { editor.putString("selected_summarize_model", model.modelId) }
         verify { editor.apply() }
     }
 
     @Test
     fun `getSelectedSummarizeModel should retrieve the saved model from shared preferences`() {
+        val model = SummarizeModel.GEMINI_3_FLASH_PREVIEW
+        every { sharedPrefs.getString("selected_summarize_model", any()) } returns model.modelId
+        
+        val retrievedModel = appPreferences.getSelectedSummarizeModel()
+        
+        assertEquals(model, retrievedModel)
+    }
+
+    @Test
+    fun `getSelectedSummarizeModel should retrieve the saved model using enum name for backward compatibility`() {
         val model = SummarizeModel.GEMINI_3_FLASH_PREVIEW
         every { sharedPrefs.getString("selected_summarize_model", any()) } returns model.name
         

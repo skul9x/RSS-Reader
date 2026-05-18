@@ -28,10 +28,19 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Decode Secrets
+      - name: Decode Secrets (if available)
         run: |
-          echo "${{ secrets.GOOGLE_SERVICES_BASE64 }}" | base64 --decode > app/google-services.json
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/release.jks
+          if [ ! -z "${{ secrets.GOOGLE_SERVICES_BASE64 }}" ]; then
+            echo "${{ secrets.GOOGLE_SERVICES_BASE64 }}" | base64 --decode > app/google-services.json
+          else
+            echo "GOOGLE_SERVICES_BASE64 not set, using pre-existing Google Services file if any."
+          fi
+          
+          if [ ! -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/release.jks
+          else
+            echo "KEYSTORE_BASE64 not set, Gradle will fallback to debug signing config."
+          fi
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -45,24 +54,41 @@ jobs:
 
       - name: Prepare APKs
         run: |
-          cp app/build/outputs/apk/release/app-release.apk RSS-Reader.apk
-          cp app/build/outputs/apk/release/app-release.apk RSS-Reader-v1.4.apk
-          # If it's a tag, we might want to use the tag name, but the user explicitly asked for 'RSS-Reader-v1.4.apk'
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            cp app/build/outputs/apk/release/app-release.apk Rss-Reader_v1.5.apk
+            echo "Successfully copied app-release.apk to Rss-Reader_v1.5.apk"
+          elif [ -f app/build/outputs/apk/release/app-release-unsigned.apk ]; then
+            cp app/build/outputs/apk/release/app-release-unsigned.apk Rss-Reader_v1.5.apk
+            echo "Successfully copied app-release-unsigned.apk to Rss-Reader_v1.5.apk"
+          elif [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp app/build/outputs/apk/debug/app-debug.apk Rss-Reader_v1.5.apk
+            echo "Successfully copied app-debug.apk to Rss-Reader_v1.5.apk"
+          else
+            echo "Searching for any generated APK..."
+            APK_PATH=$(find app/build/outputs/ -name "*.apk" | head -n 1)
+            if [ ! -z "$APK_PATH" ]; then
+              cp "$APK_PATH" Rss-Reader_v1.5.apk
+              echo "Successfully copied $APK_PATH to Rss-Reader_v1.5.apk"
+            else
+              echo "Error: No APK file found!"
+              exit 1
+            fi
+          fi
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: RSS-Reader-Internal
-          path: RSS-Reader.apk
+          name: RSS-Reader-APK
+          path: Rss-Reader_v1.5.apk
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.4
-          name: "RSS Reader v1.4 Release"
+          tag_name: v1.5
+          name: "RSS Reader v1.5 Release"
           files: |
-            RSS-Reader-v1.4.apk
+            Rss-Reader_v1.5.apk
           generate_release_notes: true
           draft: false
           prerelease: false

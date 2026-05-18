@@ -1,5 +1,17 @@
 # Changelog
  
+## [2.0] - 2026-05-18
+
+### Added
+- **Universal Dynamic Multi-Model API Rotation & Quota Management (Phase 1-4):**
+  - **Robust Failed-Over Recovery**: Implemented error-resilience for Gemini API using dynamic fallback rotation. Handles HTTP 429 (banning combination of API key + Model for 30 hours, persisted locally in SharedPreferences) and HTTP 503 (temporary 5-minute cooldown in-memory).
+  - **Dynamic TimeProvider**: Introduced a customizable lambda timeProvider in `ModelQuotaManager` to decouple current time logic from system clock, avoiding recursive JVM stack overflows in unit test mock environments.
+  - **Dynamic baseUrl Variable**: Added runtime-modifiable API endpoint mapping in `GeminiApiClient` for flawless local unit/integration test redirections without mutating any global static variables.
+  - **Full Outage Safeguards**: Automatically throws a custom error representation `AllQuotaExhausted` when all models and keys are locked/exhausted.
+  - **Self-Healing Mechanics**: Enabled `ModelManager` to perform self-healing and restore default settings when the dynamic configurations list becomes empty.
+  - **Comprehensive Test Suite**: Wrote `DynamicModelRotationIntegrationTest.kt` simulating 429 block-recovery, 503 cooldown-recovery, full resource exhaustions, and self-healing.
+  - **Device Deployment**: Assembled debug APK and successfully installed/launched the debug app onto a physical Android device (OP5D3BL1).
+
 ## [1.3] - 2026-04-21
 
 ### Added

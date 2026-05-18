@@ -1,23 +1,31 @@
 {
   "meta": { "schema_version": "1.1.0", "awf_version": "3.3.0" },
-  "project": { "name": "RSS Reader", "type": "Android App", "status": "In Progress - Integrated Smart Content Extraction" },
+  "project": { "name": "RSS Reader", "type": "Android App", "status": "Completed - Integrated Dynamic Model Rotation & Quota Management (v4.0.2)" },
   "tech_stack": { 
     "frontend": {"framework": "Jetpack Compose (Material 3)"}, 
     "backend": {"local": "Room", "sync": "Firebase", "ai": "Gemini (Flash 2.5/3.0 Lite)"}, 
     "database": {"type": "SQLite via Room"},
-    "libraries": ["Readability4J 1.0.8", "Jsoup 1.18.1"]
+    "libraries": ["Readability4J 1.0.8", "Jsoup 1.18.1", "okhttp-mockwebserver 4.12.0"]
   },
   "database_schema": { 
     "summary": "Quản lý RSS feeds, tin tức đã cache và lịch sử đọc",
     "tables": ["cached_news", "read_news", "rss_feed"], 
     "relationships_explained": "Một feed (rss_feed) chứa nhiều tin tự động cache (cached_news). Trạng thái đọc của tin được lưu ở (read_news)."
   },
-  "api_endpoints": [],
+  "api_endpoints": [
+    {
+      "path": "/v1beta/models/{model}:generateContent",
+      "explained": "Gemini API - Gửi tin tức cần tóm tắt và nhận văn bản tóm tắt định dạng text hoặc JSON."
+    }
+  ],
   "business_rules": [
     "Lịch sử đọc giữ trong 7 ngày",
     "URL Normalization: Loại bỏ tracking params (utm_, fbclid) để tránh trùng lặp tin",
     "Continuous mode đọc liên tục các tin lấy tự động (sắp hỗ trợ landscape mode)",
-    "Extraction Strategy: Custom > Site-Specific > Readability4J > Generic"
+    "Extraction Strategy: Custom > Site-Specific > Readability4J > Generic",
+    "Model-First Rotation: Try same model across all API keys before fallback to heavier/preview model",
+    "429 Quota Exceeded Strategy: Ban combination of Model + API Key for 30 hours. Persisted locally in SharedPreferences.",
+    "503 Server Overloaded Strategy: Cooldown combination of Model + API Key for 5 minutes in memory."
   ],
   "features": [
     "Đọc tin tức offline",
@@ -25,7 +33,9 @@
     "Continuous reading",
     "Firebase Sync (read read_news status)",
     "Media Button support with auto-refresh batching",
-    "Smart Content Extraction via Readability4J (Phase 3+)"
+    "Smart Content Extraction via Readability4J (Phase 3+)",
+    "Dynamic API Key & Model Rotation (chống 429 và 503)",
+    "Robust Integration/Unit Testing with local MockWebServer"
   ],
   "knowledge_items": { 
     "patterns": [
@@ -33,7 +43,9 @@
       "Jetpack Compose for UI", 
       "Concurrent memory cache for read IDs (防止 Race Condition)",
       "Model-First Rotation: Try same model across all API keys before fallback to heavier/preview model",
-      "Tiered Content Extraction Pipeline"
+      "Tiered Content Extraction Pipeline",
+      "Dynamic timeProvider interface in ModelQuotaManager for testable clock simulation",
+      "MockWebServer local routing using dynamic baseUrl variable in GeminiApiClient"
     ], 
     "gotchas": [
       "Room limitations with empty collections in IN clause (causes Crash) - Use NoExclude query variant", 
@@ -41,7 +53,8 @@
       "Jsoup charset corruption when passing String - Always pass InputStream/ByteArray for auto-detection",
       "Voz.vn large DOM CPU spikes - Use Regex to detect redirects before Parsing",
       "Memory leak via doc.clone(): Jsoup cloning duplicates large DOMs. Clean HTML as strings instead.",
-      "Readability4J SLF4J Dependency: Missing binder causes R8 build failure. Use -dontwarn org.slf4j.**"
+      "Readability4J SLF4J Dependency: Missing binder causes R8 build failure. Use -dontwarn org.slf4j.**",
+      "MockK static System.currentTimeMillis() mocking causes infinite JVM loop & StackOverflowError. Use timeProvider interface lambda instead."
     ], 
     "conventions": [
       "Use Flow for observing DB changes", 
@@ -49,7 +62,8 @@
       "Always normalize RSS URLs before processing",
       "Avoid doc.clone() in Jsoup - Use string-based cleaning for memory efficiency",
       "Prefer Regex extraction over Jsoup when possible for speed",
-      "Use Readability4J for unknown sites to improve Gemini summary quality"
+      "Use Readability4J for unknown sites to improve Gemini summary quality",
+      "Use shared stateMutex locks for all critical properties access in GeminiApiClient"
     ] 
   }
 }
