@@ -55,20 +55,20 @@ jobs:
       - name: Prepare APKs
         run: |
           if [ -f app/build/outputs/apk/release/app-release.apk ]; then
-            cp app/build/outputs/apk/release/app-release.apk Rss-Reader_v1.5.apk
-            echo "Successfully copied app-release.apk to Rss-Reader_v1.5.apk"
+            cp app/build/outputs/apk/release/app-release.apk Rss-Reader_v1.6.apk
+            echo "Successfully copied app-release.apk to Rss-Reader_v1.6.apk"
           elif [ -f app/build/outputs/apk/release/app-release-unsigned.apk ]; then
-            cp app/build/outputs/apk/release/app-release-unsigned.apk Rss-Reader_v1.5.apk
-            echo "Successfully copied app-release-unsigned.apk to Rss-Reader_v1.5.apk"
+            cp app/build/outputs/apk/release/app-release-unsigned.apk Rss-Reader_v1.6.apk
+            echo "Successfully copied app-release-unsigned.apk to Rss-Reader_v1.6.apk"
           elif [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
-            cp app/build/outputs/apk/debug/app-debug.apk Rss-Reader_v1.5.apk
-            echo "Successfully copied app-debug.apk to Rss-Reader_v1.5.apk"
+            cp app/build/outputs/apk/debug/app-debug.apk Rss-Reader_v1.6.apk
+            echo "Successfully copied app-debug.apk to Rss-Reader_v1.6.apk"
           else
             echo "Searching for any generated APK..."
             APK_PATH=$(find app/build/outputs/ -name "*.apk" | head -n 1)
             if [ ! -z "$APK_PATH" ]; then
-              cp "$APK_PATH" Rss-Reader_v1.5.apk
-              echo "Successfully copied $APK_PATH to Rss-Reader_v1.5.apk"
+              cp "$APK_PATH" Rss-Reader_v1.6.apk
+              echo "Successfully copied $APK_PATH to Rss-Reader_v1.6.apk"
             else
               echo "Error: No APK file found!"
               exit 1
@@ -79,16 +79,16 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: RSS-Reader-APK
-          path: Rss-Reader_v1.5.apk
+          path: Rss-Reader_v1.6.apk
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.5
-          name: "RSS Reader v1.5 Release"
+          tag_name: v1.6
+          name: "RSS Reader v1.6 Release"
           files: |
-            Rss-Reader_v1.5.apk
+            Rss-Reader_v1.6.apk
           generate_release_notes: true
           draft: false
           prerelease: false

@@ -21,12 +21,6 @@ class GeminiResponseHelperTest {
         val requestBody30 = GeminiResponseHelper.buildRequestBody(prompt, model30)
         assertTrue("Expected thinkingConfig for $model30 but not found. Request: $requestBody30", 
             requestBody30.contains("\"thinkingConfig\""))
-            
-        // Model gemini-flash-lite-latest should contain thinkingConfig
-        val modelLatest = "models/gemini-flash-lite-latest"
-        val requestBodyLatest = GeminiResponseHelper.buildRequestBody(prompt, modelLatest)
-        assertTrue("Expected thinkingConfig for $modelLatest but not found. Request: $requestBodyLatest", 
-            requestBodyLatest.contains("\"thinkingConfig\""))
     }
 
     @Test

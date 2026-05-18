@@ -206,7 +206,7 @@ class GeminiApiClient(private val context: Context) {
         
         // Single model for translation
         val translationModels = listOf(
-            "models/gemini-flash-lite-latest"
+            "models/gemini-2.5-flash-lite"
         )
         
         return withContext(Dispatchers.IO) {
@@ -303,7 +303,7 @@ class GeminiApiClient(private val context: Context) {
         
         // Single model for batch translation
         val translationModels = listOf(
-            "models/gemini-flash-lite-latest"
+            "models/gemini-2.5-flash-lite"
         )
         
         return withContext(Dispatchers.IO) {

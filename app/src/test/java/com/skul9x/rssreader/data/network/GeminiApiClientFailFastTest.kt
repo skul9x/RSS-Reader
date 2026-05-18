@@ -70,7 +70,7 @@ class GeminiApiClientFailFastTest {
         assertEquals(text, result)
 
         // Verify it ONLY called API for the first key
-        // (Model: gemini-flash-lite-latest, 3 keys available)
+        // (Model: gemini-2.5-flash-lite, 3 keys available)
         // If it didn't fail-fast, it would call newCall 3 times for that model
         verify(exactly = 1) { okHttpClient.newCall(any()) }
     }
