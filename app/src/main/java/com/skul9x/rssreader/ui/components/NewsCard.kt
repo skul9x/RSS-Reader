@@ -51,14 +51,24 @@ fun NewsCard(
     modifier: Modifier = Modifier
 ) {
     // 1. Tạo hiệu ứng "Thở" (Pulse) cho Alpha (độ mờ)
+    // Animation only runs when isPlaying is true.
+    // When isPlaying is false, initialValue == targetValue == 1.0f,
+    // so Compose considers the animation "at rest" and drives zero frames.
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val pulseAlpha by infiniteTransition.animateFloat(
         initialValue = 1.0f,
-        targetValue = 0.3f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
+        targetValue = if (isPlaying) 0.3f else 1.0f,
+        animationSpec = if (isPlaying) {
+            infiniteRepeatable(
+                animation = tween(1000, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            )
+        } else {
+            infiniteRepeatable(
+                animation = tween(1, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            )
+        },
         label = "pulseAlpha"
     )
 

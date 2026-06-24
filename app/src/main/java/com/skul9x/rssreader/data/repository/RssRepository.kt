@@ -363,15 +363,14 @@ class RssRepository(
     }
 
     /**
-     * Update translated titles in cache.
+     * Update translated titles in cache using batch transaction.
      */
     suspend fun updateTranslatedTitles(translations: Map<String, String>) = withContext(Dispatchers.IO) {
-        translations.forEach { (id, title) ->
-            try {
-                cachedNewsDao.updateTranslatedTitle(id, title)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error updating translation for $id", e)
-            }
+        if (translations.isEmpty()) return@withContext
+        try {
+            cachedNewsDao.updateTranslatedTitlesBatch(translations)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error batch updating translations", e)
         }
     }
 }

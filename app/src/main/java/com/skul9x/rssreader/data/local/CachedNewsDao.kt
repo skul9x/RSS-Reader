@@ -114,6 +114,19 @@ interface CachedNewsDao {
     suspend fun updateTranslatedTitle(id: String, translatedTitle: String)
 
     /**
+     * Batch update translated titles in a single transaction.
+     * Reduces N individual disk writes to 1 atomic commit.
+     * 
+     * @param translations Map of newsId -> translatedTitle
+     */
+    @Transaction
+    suspend fun updateTranslatedTitlesBatch(translations: Map<String, String>) {
+        translations.forEach { (id, title) ->
+            updateTranslatedTitle(id, title)
+        }
+    }
+
+    /**
      * Delete all cached news.
      */
     @Query("DELETE FROM cached_news")

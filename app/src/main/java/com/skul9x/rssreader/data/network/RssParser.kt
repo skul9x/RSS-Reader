@@ -1,11 +1,20 @@
 package com.skul9x.rssreader.data.network
 
 import com.skul9x.rssreader.data.model.NewsItem
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.Request
+import okhttp3.Response
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
+import java.io.IOException
 import java.io.StringReader
 import java.security.MessageDigest
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * RSS/Atom feed parser using OkHttp for network requests.
@@ -23,7 +32,7 @@ class RssParser {
 
     /**
      * Fetch and parse an RSS feed from the given URL.
-     * Uses browser-like headers to avoid being blocked by some servers.
+     * Uses non-blocking enqueue() with cancellation support.
      */
     suspend fun fetchFeed(feedUrl: String, feedId: Long = 0, feedName: String = ""): List<NewsItem> {
         val request = Request.Builder()
@@ -38,13 +47,46 @@ class RssParser {
             .build()
 
         return try {
-            val response = client.newCall(request).execute()
-            if (response.isSuccessful) {
-                val xml = response.body?.string() ?: return emptyList()
-                parseXml(xml, feedId, feedName)
-            } else {
-                emptyList()
+            // Non-blocking HTTP call with cancellation support
+            val response = suspendCancellableCoroutine<Response> { continuation ->
+                val call = client.newCall(request)
+
+                continuation.invokeOnCancellation {
+                    call.cancel()
+                }
+
+                call.enqueue(object : Callback {
+                    override fun onFailure(call: Call, e: IOException) {
+                        if (!continuation.isCompleted) {
+                            continuation.resumeWithException(e)
+                        }
+                    }
+
+                    override fun onResponse(call: Call, response: Response) {
+                        if (!continuation.isCompleted) {
+                            continuation.resume(response) { cause ->
+                                response.close()
+                            }
+                        } else {
+                            response.close()
+                        }
+                    }
+                })
             }
+
+            // Parse on IO dispatcher (CPU-bound XML parsing)
+            withContext(Dispatchers.IO) {
+                response.use { resp ->
+                    if (resp.isSuccessful) {
+                        val xml = resp.body?.string() ?: return@withContext emptyList()
+                        parseXml(xml, feedId, feedName)
+                    } else {
+                        emptyList()
+                    }
+                }
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e  // Propagate cancellation
         } catch (e: Exception) {
             e.printStackTrace()
             emptyList()

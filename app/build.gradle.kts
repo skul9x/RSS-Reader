@@ -112,6 +112,7 @@ dependencies {
     testImplementation("io.mockk:mockk:1.13.10")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     testImplementation(libs.okhttp.mockwebserver)
+    testImplementation("net.sf.kxml:kxml2:2.3.0")
 
     // Firebase
     implementation(platform(libs.firebase.bom))

@@ -101,18 +101,41 @@ interface ReadNewsDao {
     suspend fun markAllAsSynced()
 
     /**
-     * Batch insert remote items, skipping any that would overwrite PENDING local items.
-     * Uses @Transaction to ensure atomicity and high performance (single SQL transaction).
+     * Get IDs from the given list that currently have PENDING sync status.
+     * Used to protect PENDING items from being overwritten by remote data.
+     */
+    @Query("SELECT newsId FROM read_news WHERE newsId IN (:newsIds) AND syncStatus = 'PENDING'")
+    suspend fun getPendingIds(newsIds: List<String>): List<String>
+
+    /**
+     * Batch upsert remote items, skipping any that would overwrite PENDING local items.
+     * Uses 2-query batch strategy instead of N individual queries:
+     *   1. Fetch all PENDING IDs from input set (1 query)
+     *   2. Insert non-PENDING items in batch (1 query)
+     *
+     * Handles SQLite's 999 variable limit by chunking internally.
      */
     @Transaction
     suspend fun upsertFromRemoteBatch(items: List<ReadNewsItem>) {
-        items.forEach { item ->
-            upsertFromRemoteIfNotPending(
-                newsId = item.newsId,
-                readAt = item.readAt,
-                deviceType = item.deviceType,
-                syncStatus = item.syncStatus
-            )
+        if (items.isEmpty()) return
+
+        // Step 1: Find which items from the input are currently PENDING locally
+        val allIds = items.map { it.newsId }
+        val pendingIds = mutableSetOf<String>()
+        allIds.chunked(900).forEach { chunk ->
+            pendingIds.addAll(getPendingIds(chunk))
+        }
+
+        // Step 2: Filter out PENDING items (protect local changes)
+        val safeToInsert = if (pendingIds.isEmpty()) {
+            items
+        } else {
+            items.filter { it.newsId !in pendingIds }
+        }
+
+        // Step 3: Batch insert (Room handles batch efficiently with @Insert)
+        if (safeToInsert.isNotEmpty()) {
+            insertAll(safeToInsert)
         }
     }
 

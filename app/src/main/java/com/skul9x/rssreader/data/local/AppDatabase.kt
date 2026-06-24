@@ -18,7 +18,7 @@ import com.skul9x.rssreader.data.local.entity.FirebaseLog
 
 @Database(
     entities = [RssFeed::class, CachedNewsItem::class, ReadNewsItem::class, NewsSummary::class, ActivityLog::class, FirebaseLog::class],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
