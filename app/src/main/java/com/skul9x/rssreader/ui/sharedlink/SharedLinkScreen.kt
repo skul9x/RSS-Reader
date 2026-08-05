@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -39,6 +41,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -47,6 +50,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -72,6 +76,8 @@ private object SharedLinkScreenConstants {
     const val ERROR_CARD_ALPHA = 0.2f
     const val TEXT_SECONDARY_ALPHA = 0.7f
     const val TEXT_PRIMARY_ALPHA = 0.9f
+    const val VOLUME_ACTIVE_ALPHA = 1.0f
+    const val VOLUME_INACTIVE_ALPHA = 0.4f
     
     // Colors
     val GRADIENT_START = Color(0xFF1a1a2e)
@@ -80,6 +86,20 @@ private object SharedLinkScreenConstants {
     val ACCENT_COLOR = Color(0xFF00d4ff)
     val SUCCESS_COLOR = Color(0xFF00e676)
     val ERROR_COLOR = Color(0xFFff5252)
+}
+
+/**
+ * Calculates volume button alpha based on active status.
+ */
+fun getVolumeButtonAlpha(isVolumeControlActive: Boolean): Float {
+    return if (isVolumeControlActive) SharedLinkScreenConstants.VOLUME_ACTIVE_ALPHA else SharedLinkScreenConstants.VOLUME_INACTIVE_ALPHA
+}
+
+/**
+ * Formats volume percentage text for UI display.
+ */
+fun getVolumeButtonText(volumePercent: Int?): String {
+    return volumePercent?.let { "$it%" } ?: ""
 }
 
 /**
@@ -131,10 +151,40 @@ fun SharedLinkScreen(
                         )
                     }
                 },
+                actions = {
+                    TextButton(
+                        onClick = { viewModel.cycleVolume() },
+                        modifier = Modifier.alpha(getVolumeButtonAlpha(uiState.isVolumeControlActive)),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.VolumeUp,
+                                contentDescription = "Âm lượng",
+                                tint = Color.White
+                            )
+                            val text = getVolumeButtonText(uiState.currentVolumePercent)
+                            if (text.isNotEmpty()) {
+                                Text(
+                                    text = text,
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier.padding(start = 4.dp)
+                                )
+                            }
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Transparent,
                     titleContentColor = Color.White,
-                    navigationIconContentColor = Color.White
+                    navigationIconContentColor = Color.White,
+                    actionIconContentColor = Color.White
                 )
             )
         },

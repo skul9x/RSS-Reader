@@ -72,6 +72,9 @@ fun SettingsScreen(
     var isApiKeysExpanded by remember { mutableStateOf(false) }
     var showAddKeyDialog by remember { mutableStateOf(false) }
     
+    // State for clear cache dialog
+    var showClearCacheDialog by remember { mutableStateOf(false) }
+    
     // State for screen mode
     var currentScreenMode by remember { mutableStateOf(appPreferences.getScreenMode()) }
     var isScreenModeExpanded by remember { mutableStateOf(false) }
@@ -155,6 +158,16 @@ fun SettingsScreen(
                         viewModel.refreshNews()
                         Toast.makeText(context, "Đang cập nhật...", Toast.LENGTH_SHORT).show()
                     }
+                }
+            )
+            
+            // Clear cache button
+            SettingsItem(
+                icon = Icons.Default.Delete,
+                title = "Xóa bộ nhớ tạm (Cache)",
+                subtitle = "Xóa toàn bộ bộ nhớ đệm tin tức",
+                onClick = {
+                    showClearCacheDialog = true
                 }
             )
             
@@ -332,6 +345,37 @@ fun SettingsScreen(
                     showAddKeyDialog = false
                 } else {
                     Toast.makeText(context, "Không tìm thấy API key hợp lệ hoặc key đã tồn tại", Toast.LENGTH_SHORT).show()
+                }
+            }
+        )
+    }
+
+    // Clear Cache Confirmation Dialog
+    if (showClearCacheDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearCacheDialog = false },
+            title = {
+                Text(text = "Xác nhận xóa bộ nhớ tạm")
+            },
+            text = {
+                Text(text = "Bạn có chắc chắn muốn xóa toàn bộ bộ nhớ tạm (cache)? Hành động này không thể hoàn tác.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearCacheDialog = false
+                        viewModel.clearCache()
+                        Toast.makeText(context, "Đã xóa bộ nhớ tạm thành công!", Toast.LENGTH_SHORT).show()
+                    }
+                ) {
+                    Text(text = "Xóa")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showClearCacheDialog = false }
+                ) {
+                    Text(text = "Hủy")
                 }
             }
         )

@@ -46,6 +46,7 @@ fun HtmlAnalyzerScreen(
     var rawHtml by remember { mutableStateOf("") }
     var isAnalyzing by remember { mutableStateOf(false) }
     var analysisStatus by remember { mutableStateOf("") }
+    var selectedTab by remember { mutableIntStateOf(0) }
     
     // FIX: Debounce tracking to prevent double submission
     var lastAnalyzeClickTime by remember { mutableLongStateOf(0L) }
@@ -64,6 +65,78 @@ fun HtmlAnalyzerScreen(
     
     // FIX: Track selector changes to trigger recomposition in Custom Selector tab
     var customSelectorRefreshKey by remember { mutableIntStateOf(0) }
+
+    val startAnalysis: (String) -> Unit = { targetUrl ->
+        if (targetUrl.isNotBlank() && !isAnalyzing) {
+            isAnalyzing = true
+            analysisStatus = "Đang tải... (0s)"
+            val startTime = System.currentTimeMillis()
+            resultTitle = ""
+            resultContent = ""
+            candidates = emptyList()
+            
+            scope.launch {
+                try {
+                    val timeoutJob = scope.launch {
+                        var elapsed = 0
+                        while (true) {
+                            kotlinx.coroutines.delay(1000)
+                            elapsed++
+                            analysisStatus = "Đang tải... (${elapsed}s)"
+                            if (elapsed >= 30) {
+                                analysisStatus = "Đang tải... (${elapsed}s) - Có thể bị timeout"
+                            }
+                        }
+                    }
+                    
+                    try {
+                        val (result, html) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            val r = contentFetcher.fetchArticleWithTitle(targetUrl)
+                            val h = contentFetcher.fetchRawHtml(targetUrl)
+                            Pair(r, h)
+                        }
+                        
+                        timeoutJob.cancel()
+                        
+                        rawHtml = html ?: "Failed to fetch HTML"
+                        
+                        if (html != null) {
+                            candidates = contentFetcher.scanForPotentialContainers(html)
+                        }
+                        
+                        if (result != null) {
+                            resultTitle = result.title
+                            resultContent = result.content
+                            analysisStatus = "Success! Content extracted."
+                        } else {
+                            analysisStatus = "Extraction Failed. Try the 'Smart Select' tab."
+                            resultTitle = "N/A"
+                            resultContent = "Fetcher returned null."
+                        }
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        timeoutJob.cancel()
+                        throw e
+                    } catch (e: java.io.IOException) {
+                        timeoutJob.cancel()
+                        val elapsed = (System.currentTimeMillis() - startTime) / 1000
+                        analysisStatus = "Network Error (${elapsed}s): ${e.message ?: "Connection failed"}"
+                        rawHtml = ""
+                    } catch (e: Exception) {
+                        timeoutJob.cancel()
+                        val elapsed = (System.currentTimeMillis() - startTime) / 1000
+                        analysisStatus = "Error (${elapsed}s): ${e.message ?: "Unknown error"}"
+                        rawHtml = ""
+                    } finally {
+                        isAnalyzing = false
+                    }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } finally {
+                    isAnalyzing = false
+                }
+            }
+        }
+    }
     
     // FIX: Cleanup resources when Composable is disposed
     DisposableEffect(Unit) {
@@ -203,7 +276,6 @@ fun HtmlAnalyzerScreen(
                     
                     Button(
                         onClick = {
-                            // FIX: Debounce to prevent double submission
                             val now = System.currentTimeMillis()
                             if (now - lastAnalyzeClickTime < 1000) return@Button
                             lastAnalyzeClickTime = now
@@ -213,82 +285,7 @@ fun HtmlAnalyzerScreen(
                                 return@Button
                             }
                             
-                            // FIX: Capture current URL value to prevent closure capturing mutable state
-                            val targetUrl = urlInput
-                            
-                            isAnalyzing = true
-                            analysisStatus = "Đang tải... (0s)"
-                            val startTime = System.currentTimeMillis()
-                            resultTitle = ""
-                            resultContent = ""
-                            candidates = emptyList()
-                            
-                                scope.launch {
-                                    try {
-                                        // FIX: Timeout feedback - update status periodically
-                                        val timeoutJob = scope.launch {
-                                            var elapsed = 0
-                                            while (true) {
-                                                kotlinx.coroutines.delay(1000)
-                                                elapsed++
-                                                analysisStatus = "Đang tải... (${elapsed}s)"
-                                                if (elapsed >= 30) {
-                                                    analysisStatus = "Đang tải... (${elapsed}s) - Có thể bị timeout"
-                                                }
-                                            }
-                                        }
-                                        
-                                        try {
-                                            // FIX: Use Dispatchers.IO for network operations
-                                            val (result, html) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                                val r = contentFetcher.fetchArticleWithTitle(targetUrl)
-                                                val h = contentFetcher.fetchRawHtml(targetUrl)
-                                                Pair(r, h)
-                                            }
-                                            
-                                            timeoutJob.cancel()
-                                    
-                                    rawHtml = html ?: "Failed to fetch HTML"
-                                    
-                                    // Scan for candidates from raw HTML
-                                    if (html != null) {
-                                        candidates = contentFetcher.scanForPotentialContainers(html)
-                                    }
-                                    
-                                    if (result != null) {
-                                        resultTitle = result.title
-                                        resultContent = result.content
-                                        analysisStatus = "Success! Content extracted."
-                                    } else {
-                                        analysisStatus = "Extraction Failed. Try the 'Smart Select' tab."
-                                        resultTitle = "N/A"
-                                        resultContent = "Fetcher returned null."
-                                    }
-                                        } catch (e: kotlinx.coroutines.CancellationException) {
-                                            timeoutJob.cancel()
-                                            // FIX: Re-throw CancellationException to respect structured concurrency
-                                            throw e
-                                        } catch (e: java.io.IOException) {
-                                            timeoutJob.cancel()
-                                            // FIX: Handle network errors specifically
-                                            val elapsed = (System.currentTimeMillis() - startTime) / 1000
-                                            analysisStatus = "Network Error (${elapsed}s): ${e.message ?: "Connection failed"}"
-                                            rawHtml = ""
-                                        } catch (e: Exception) {
-                                            timeoutJob.cancel()
-                                            // FIX: Don't expose stacktrace in production
-                                            val elapsed = (System.currentTimeMillis() - startTime) / 1000
-                                            analysisStatus = "Error (${elapsed}s): ${e.message ?: "Unknown error"}"
-                                            rawHtml = ""
-                                        } finally {
-                                            isAnalyzing = false
-                                        }
-                                    } catch (e: kotlinx.coroutines.CancellationException) {
-                                        throw e
-                                    } finally {
-                                        isAnalyzing = false
-                                    }
-                                }
+                            startAnalysis(urlInput)
                         },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !isAnalyzing
@@ -320,7 +317,7 @@ fun HtmlAnalyzerScreen(
             }
 
             // Result Section
-            if (resultTitle.isNotEmpty() || resultContent.isNotEmpty() || rawHtml.isNotEmpty()) {
+            if (resultTitle.isNotEmpty() || resultContent.isNotEmpty() || rawHtml.isNotEmpty() || isAnalyzing) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
@@ -333,8 +330,6 @@ fun HtmlAnalyzerScreen(
                             color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                        
-                        var selectedTab by remember { mutableIntStateOf(0) }
                         
                         TabRow(selectedTabIndex = selectedTab) {
                             Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Extracted") })
@@ -413,6 +408,10 @@ fun HtmlAnalyzerScreen(
                                 val currentUrl = urlInput
                                 Button(
                                     onClick = {
+                                        val now = System.currentTimeMillis()
+                                        if (now - lastAnalyzeClickTime < 1000) return@Button
+                                        lastAnalyzeClickTime = now
+
                                         if (customSelectorInput.isBlank()) {
                                             Toast.makeText(context, "Vui lòng nhập selector", Toast.LENGTH_SHORT).show()
                                             return@Button
@@ -429,10 +428,15 @@ fun HtmlAnalyzerScreen(
                                             "Đã lưu: ${customSelectorInput.trim()} cho ${customSelectorManager.getDomain(currentUrl)}",
                                             Toast.LENGTH_SHORT
                                         ).show()
-                                        analysisStatus = "Selector đã lưu. Tap Analyze để verify."
+                                        
+                                        // Auto-refresh: Clear extraction states, set selectedTab to 0, and re-trigger fetch
+                                        resultTitle = ""
+                                        resultContent = ""
+                                        selectedTab = 0
+                                        startAnalysis(currentUrl)
                                     },
                                     modifier = Modifier.fillMaxWidth(),
-                                    enabled = customSelectorInput.isNotBlank() && urlInput.isNotBlank()
+                                    enabled = !isAnalyzing && customSelectorInput.isNotBlank() && urlInput.isNotBlank()
                                 ) {
                                     Icon(Icons.Default.BugReport, null, modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
@@ -651,15 +655,26 @@ $cleanedHtml"""
                                                 val currentUrl = urlInput
                                                 FilledTonalButton(
                                                     onClick = {
+                                                        val now = System.currentTimeMillis()
+                                                        if (now - lastAnalyzeClickTime < 1000) return@FilledTonalButton
+                                                        lastAnalyzeClickTime = now
+
                                                         customSelectorManager.addSelector(currentUrl, aiSuggestResult)
+                                                        customSelectorRefreshKey++
                                                         Toast.makeText(
                                                             context,
                                                             "Đã lưu: $aiSuggestResult cho ${customSelectorManager.getDomain(currentUrl)}",
                                                             Toast.LENGTH_SHORT
                                                         ).show()
-                                                        analysisStatus = "Selector từ AI đã lưu. Tap Analyze để verify."
+
+                                                        // Auto-refresh: Clear extraction states, set selectedTab to 0, and re-trigger fetch
+                                                        resultTitle = ""
+                                                        resultContent = ""
+                                                        selectedTab = 0
+                                                        startAnalysis(currentUrl)
                                                     },
-                                                    modifier = Modifier.fillMaxWidth()
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    enabled = !isAnalyzing
                                                 ) {
                                                     Icon(Icons.Default.ContentPaste, null, modifier = Modifier.size(18.dp))
                                                     Spacer(modifier = Modifier.width(8.dp))

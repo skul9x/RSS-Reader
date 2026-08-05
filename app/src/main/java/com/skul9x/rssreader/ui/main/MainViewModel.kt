@@ -510,6 +510,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
+     * Clear all cached news items from the database.
+     */
+    fun clearCache() {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.clearCache()
+        }
+    }
+
+    /**
      * Get API status for debugging.
      */
     fun getApiStatus(): String = geminiClient.getCurrentStatus()

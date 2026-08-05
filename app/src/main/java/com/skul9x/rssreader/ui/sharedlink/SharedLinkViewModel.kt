@@ -13,6 +13,7 @@ import com.skul9x.rssreader.service.NewsReaderService
 import com.skul9x.rssreader.utils.ActivityLogger
 import com.skul9x.rssreader.utils.DebugLogger
 import com.skul9x.rssreader.utils.VietnameseDetector
+import com.skul9x.rssreader.utils.VolumeController
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -269,6 +270,21 @@ class SharedLinkViewModel(application: Application) : AndroidViewModel(applicati
     fun clearError() {
         _uiState.update { it.copy(error = null) }
     }
+
+    /**
+     * Cycle volume percentage (80% -> 85% -> 90% -> 80%) and apply to device volume.
+     */
+    fun cycleVolume() {
+        val currentPercent = _uiState.value.currentVolumePercent
+        val nextPercent = VolumeController.getNextVolumePercentage(currentPercent)
+        VolumeController.setDeviceVolume(getApplication(), nextPercent)
+        _uiState.update { 
+            it.copy(
+                isVolumeControlActive = true,
+                currentVolumePercent = nextPercent
+            ) 
+        }
+    }
 }
 
 /**
@@ -281,5 +297,7 @@ data class SharedLinkUiState(
     val status: String = "",
     val originalContent: String? = null,
     val summary: String? = null,
-    val error: String? = null
+    val error: String? = null,
+    val isVolumeControlActive: Boolean = false,
+    val currentVolumePercent: Int? = null
 )
