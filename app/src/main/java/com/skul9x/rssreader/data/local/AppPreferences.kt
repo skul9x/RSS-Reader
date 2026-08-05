@@ -76,18 +76,19 @@ class AppPreferences private constructor(context: Context) {
     }
 
     fun getSelectedModelId(): String {
-        val storedValue = prefs.getString(KEY_SELECTED_SUMMARIZE_MODEL, "models/gemini-2.5-flash-lite") ?: "models/gemini-2.5-flash-lite"
+        val storedValue = prefs.getString(KEY_SELECTED_SUMMARIZE_MODEL, "models/gemini-3.5-flash-lite") ?: "models/gemini-3.5-flash-lite"
         if (!storedValue.startsWith("models/")) {
             return try {
                 val enumVal = SummarizeModel.valueOf(storedValue)
                 enumVal.modelId
             } catch (e: Exception) {
                 when (storedValue) {
+                    "GEMINI_3_5_FLASH_LITE" -> "models/gemini-3.5-flash-lite"
+                    "GEMINI_3_1_FLASH_LITE" -> "models/gemini-3.1-flash-lite"
                     "GEMINI_2_5_FLASH_LITE" -> "models/gemini-2.5-flash-lite"
-                    "GEMINI_3_FLASH_PREVIEW" -> "models/gemini-3-flash-preview"
-                    "GEMINI_3_1_FLASH_LITE_PREVIEW" -> "models/gemini-3.1-flash-lite-preview"
+                    "GEMINI_3_6_FLASH" -> "models/gemini-3.6-flash"
                     "GEMINI_2_5_FLASH" -> "models/gemini-2.5-flash"
-                    else -> "models/gemini-2.5-flash-lite"
+                    else -> "models/gemini-3.5-flash-lite"
                 }
             }
         }
@@ -100,7 +101,7 @@ class AppPreferences private constructor(context: Context) {
 
     fun getSelectedSummarizeModel(): SummarizeModel {
         val modelId = getSelectedModelId()
-        return SummarizeModel.entries.firstOrNull { it.modelId == modelId } ?: SummarizeModel.GEMINI_2_5_FLASH_LITE
+        return SummarizeModel.entries.firstOrNull { it.modelId == modelId } ?: SummarizeModel.GEMINI_3_5_FLASH_LITE
     }
 
     fun registerOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {

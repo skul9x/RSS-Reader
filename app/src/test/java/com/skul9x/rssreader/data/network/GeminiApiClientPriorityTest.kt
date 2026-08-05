@@ -50,17 +50,18 @@ class GeminiApiClientPriorityTest {
         mockkObject(ModelManager)
         every { ModelManager.getInstance(any()) } returns modelManager
         coEvery { modelManager.getModels() } returns listOf(
+            DynamicModel("models/gemini-3.5-flash-lite", "Gemini 3.5 Flash Lite"),
             DynamicModel("models/gemini-3.1-flash-lite", "Gemini 3.1 Flash Lite"),
             DynamicModel("models/gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite"),
-            DynamicModel("models/gemini-3-flash-preview", "Gemini 3 Flash Preview"),
+            DynamicModel("models/gemini-3.6-flash", "Gemini 3.6 Flash"),
             DynamicModel("models/gemini-2.5-flash", "Gemini 2.5 Flash")
         )
 
         mockkObject(AppPreferences)
         every { AppPreferences.getInstance(any()) } returns appPreferences
-        // Default: User selects Gemini 3 Flash Preview
-        every { appPreferences.getSelectedSummarizeModel() } returns SummarizeModel.GEMINI_3_FLASH_PREVIEW
-        every { appPreferences.getSelectedModelId() } returns "models/gemini-3-flash-preview"
+        // Default: User selects Gemini 3.6 Flash
+        every { appPreferences.getSelectedSummarizeModel() } returns SummarizeModel.GEMINI_3_6_FLASH
+        every { appPreferences.getSelectedModelId() } returns "models/gemini-3.6-flash"
 
         mockkObject(AppDatabase)
         every { AppDatabase.getDatabase(any()) } returns database
@@ -113,8 +114,8 @@ class GeminiApiClientPriorityTest {
 
         apiClient.summarizeForTts("content", "url")
 
-        // Verify that the first model called is Gemini 3 Flash Preview (the user selection)
-        assertEquals("models/gemini-3-flash-preview", capturedModels.first())
+        // Verify that the first model called is Gemini 3.6 Flash (the user selection)
+        assertEquals("models/gemini-3.6-flash", capturedModels.first())
     }
 
     @Test
@@ -124,13 +125,14 @@ class GeminiApiClientPriorityTest {
         val sortedModels = apiClient.getSortedPriorityModels()
         
         assertEquals("models/gemini-2.5-flash", sortedModels.first())
-        assertEquals(4, sortedModels.size)
+        assertEquals(5, sortedModels.size)
         assertEquals(
             listOf(
                 "models/gemini-2.5-flash",
+                "models/gemini-3.5-flash-lite",
                 "models/gemini-3.1-flash-lite",
                 "models/gemini-2.5-flash-lite",
-                "models/gemini-3-flash-preview"
+                "models/gemini-3.6-flash"
             ),
             sortedModels
         )
@@ -144,9 +146,10 @@ class GeminiApiClientPriorityTest {
         
         assertEquals(
             listOf(
+                "models/gemini-3.5-flash-lite",
                 "models/gemini-3.1-flash-lite",
                 "models/gemini-2.5-flash-lite",
-                "models/gemini-3-flash-preview",
+                "models/gemini-3.6-flash",
                 "models/gemini-2.5-flash"
             ),
             sortedModels

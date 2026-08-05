@@ -26,9 +26,10 @@ class ModelManager private constructor(context: Context) {
         private const val KEY_SAVED_MODELS = "saved_models"
 
         val DEFAULT_MODELS = listOf(
+            DynamicModel("models/gemini-3.5-flash-lite", "Gemini 3.5 Flash Lite"),
             DynamicModel("models/gemini-3.1-flash-lite", "Gemini 3.1 Flash Lite"),
             DynamicModel("models/gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite"),
-            DynamicModel("models/gemini-3-flash-preview", "Gemini 3 Flash Preview"),
+            DynamicModel("models/gemini-3.6-flash", "Gemini 3.6 Flash"),
             DynamicModel("models/gemini-2.5-flash", "Gemini 2.5 Flash")
         )
 

@@ -32,7 +32,7 @@ class AppPreferencesTest {
 
     @Test
     fun `setSelectedSummarizeModel should save the model id to shared preferences`() {
-        val model = SummarizeModel.GEMINI_3_FLASH_PREVIEW
+        val model = SummarizeModel.GEMINI_3_6_FLASH
         
         appPreferences.setSelectedSummarizeModel(model)
         
@@ -43,7 +43,7 @@ class AppPreferencesTest {
 
     @Test
     fun `getSelectedSummarizeModel should retrieve the saved model from shared preferences`() {
-        val model = SummarizeModel.GEMINI_3_FLASH_PREVIEW
+        val model = SummarizeModel.GEMINI_3_6_FLASH
         every { sharedPrefs.getString("selected_summarize_model", any()) } returns model.modelId
         
         val retrievedModel = appPreferences.getSelectedSummarizeModel()
@@ -53,7 +53,7 @@ class AppPreferencesTest {
 
     @Test
     fun `getSelectedSummarizeModel should retrieve the saved model using enum name for backward compatibility`() {
-        val model = SummarizeModel.GEMINI_3_FLASH_PREVIEW
+        val model = SummarizeModel.GEMINI_3_6_FLASH
         every { sharedPrefs.getString("selected_summarize_model", any()) } returns model.name
         
         val retrievedModel = appPreferences.getSelectedSummarizeModel()
@@ -63,7 +63,7 @@ class AppPreferencesTest {
 
     @Test
     fun `getSelectedSummarizeModel should return default model if none is saved`() {
-        val defaultModel = SummarizeModel.GEMINI_2_5_FLASH_LITE
+        val defaultModel = SummarizeModel.GEMINI_3_5_FLASH_LITE
         every { sharedPrefs.getString("selected_summarize_model", any()) } returns null
         
         val retrievedModel = appPreferences.getSelectedSummarizeModel()

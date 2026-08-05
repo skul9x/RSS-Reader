@@ -45,9 +45,10 @@ class GeminiApiClient(private val context: Context) {
 
         // Models (cycled in order when quota exceeded)
         private val MODELS = listOf(
+            "models/gemini-3.5-flash-lite",
+            "models/gemini-3.1-flash-lite",
             "models/gemini-2.5-flash-lite",
-            "models/gemini-3-flash-preview",
-            "models/gemini-3.1-flash-lite-preview",
+            "models/gemini-3.6-flash",
             "models/gemini-2.5-flash"
         )
     }

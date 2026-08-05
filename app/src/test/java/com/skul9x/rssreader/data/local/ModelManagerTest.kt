@@ -50,8 +50,8 @@ class ModelManagerTest {
         
         // Then: SharedPreferences should be saved with default list
         verify { prefsEditor.putString("saved_models", any()) }
-        assertEquals(4, models.size)
-        assertEquals("models/gemini-3.1-flash-lite", models[0].modelId)
+        assertEquals(5, models.size)
+        assertEquals("models/gemini-3.5-flash-lite", models[0].modelId)
     }
 
     @Test
@@ -69,7 +69,7 @@ class ModelManagerTest {
         assertTrue(validAdded)
         
         val models = modelManager.getModels()
-        assertEquals(5, models.size)
+        assertEquals(6, models.size)
         assertEquals("models/gemini-2.5-pro", models.last().modelId)
     }
 
@@ -82,10 +82,10 @@ class ModelManagerTest {
         // When: delete that only model
         val deleted = modelManager.removeModel("models/custom-model")
         
-        // Then: deleted is true, list size is reset to defaults (4)
+        // Then: deleted is true, list size is reset to defaults (5)
         assertTrue(deleted)
         val models = modelManager.getModels()
-        assertEquals(4, models.size)
-        assertEquals("models/gemini-3.1-flash-lite", models[0].modelId)
+        assertEquals(5, models.size)
+        assertEquals("models/gemini-3.5-flash-lite", models[0].modelId)
     }
 }
