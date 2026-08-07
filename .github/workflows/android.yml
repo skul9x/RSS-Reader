@@ -87,37 +87,7 @@ jobs:
             echo "Decoded google-services.json from GitHub Secrets."
           elif [ ! -f app/google-services.json ]; then
             echo "Creating dummy app/google-services.json for build..."
-            cat << 'EOF' > app/google-services.json
-{
-  "project_info": {
-    "project_number": "1234567890",
-    "project_id": "rss-reader-build",
-    "storage_bucket": "rss-reader-build.appspot.com"
-  },
-  "client": [
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:1234567890:android:1234567890abcdef",
-        "android_client_info": {
-          "package_name": "com.skul9x.rssreader"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "dummy_api_key_for_ci_build"
-        }
-      ],
-      "services": {
-        "analytics_service": {
-          "status": 1
-        }
-      }
-    }
-  ],
-  "configuration_version": "1"
-}
-EOF
+            echo '{"project_info":{"project_number":"1234567890","project_id":"rss-reader-build","storage_bucket":"rss-reader-build.appspot.com"},"client":[{"client_info":{"mobilesdk_app_id":"1:1234567890:android:1234567890abcdef","android_client_info":{"package_name":"com.skul9x.rssreader"}},"oauth_client":[],"api_key":[{"current_key":"dummy_api_key_for_ci_build"}],"services":{"analytics_service":{"status":1}}}],"configuration_version":"1"}' > app/google-services.json
             echo "Dummy google-services.json created successfully."
           fi
 
