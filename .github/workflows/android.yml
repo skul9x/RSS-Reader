@@ -67,19 +67,23 @@ jobs:
           echo "Calculated Version: $VERSION"
 
       - name: Decode Keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/release.jks
-            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/keystore.jks
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 --decode > app/release.jks
+            echo "$KEYSTORE_BASE64" | base64 --decode > app/keystore.jks
             echo "Keystore decoded successfully."
           else
             echo "KEYSTORE_BASE64 secret not set, fallback to default."
           fi
 
       - name: Setup Google Services JSON
+        env:
+          GOOGLE_SERVICES_BASE64: ${{ secrets.GOOGLE_SERVICES_BASE64 }}
         run: |
-          if [ -n "${{ secrets.GOOGLE_SERVICES_BASE64 }}" ]; then
-            echo "${{ secrets.GOOGLE_SERVICES_BASE64 }}" | base64 --decode > app/google-services.json
+          if [ -n "$GOOGLE_SERVICES_BASE64" ]; then
+            echo "$GOOGLE_SERVICES_BASE64" | base64 --decode > app/google-services.json
             echo "Decoded google-services.json from GitHub Secrets."
           elif [ ! -f app/google-services.json ]; then
             echo "Creating dummy app/google-services.json for build..."
@@ -120,8 +124,8 @@ EOF
       - name: Build Release APK
         run: ./gradlew :app:assembleRelease
         env:
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-          KEYSTORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || secrets.KEYSTORE_PASSWORD }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || secrets.STORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
