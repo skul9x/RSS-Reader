@@ -26,8 +26,9 @@ android {
         create("release") {
             // Read from Environment Variables (GitHub Secrets) or fallback to local
             val keystoreFile = file("release.jks")
-            storeFile = if (keystoreFile.exists()) keystoreFile else file("debug.keystore")
-            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "android"
+            val keystoreFile2 = file("keystore.jks")
+            storeFile = if (keystoreFile.exists()) keystoreFile else if (keystoreFile2.exists()) keystoreFile2 else file("debug.keystore")
+            storePassword = System.getenv("STORE_PASSWORD") ?: System.getenv("KEYSTORE_PASSWORD") ?: "android"
             keyAlias = System.getenv("KEY_ALIAS") ?: "androiddebugkey"
             keyPassword = System.getenv("KEY_PASSWORD") ?: "android"
         }

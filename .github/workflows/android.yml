@@ -1,0 +1,119 @@
+name: Android CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & Release Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Slugify App Name
+        id: slugify
+        run: |
+          REPO_NAME="${{ github.event.repository.name }}"
+          APP_SLUG=$(echo "$REPO_NAME" | tr '[:upper:]' '[:lower:]' | sed -E 's/[ _]+/-/g')
+          echo "APP_SLUG=$APP_SLUG" >> $GITHUB_ENV
+          echo "App Slug: $APP_SLUG"
+
+      - name: Auto-Increment Versioning
+        id: versioning
+        run: |
+          # Fetch latest release tag from GitHub API
+          RESPONSE=$(curl -sH "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/latest")
+          
+          TAG_NAME=$(echo "$RESPONSE" | jq -r '.tag_name // empty')
+
+          if [ -z "$TAG_NAME" ] || [ "$TAG_NAME" = "null" ]; then
+            VERSION="v1.0"
+          else
+            # Extract and increment minor version
+            CLEAN_TAG=$(echo "$TAG_NAME" | sed 's/^[vV]//')
+            MAJOR=$(echo "$CLEAN_TAG" | cut -d. -f1)
+            MINOR=$(echo "$CLEAN_TAG" | cut -d. -f2)
+
+            if [ -z "$MAJOR" ] || [ -z "$MINOR" ]; then
+              VERSION="v1.0"
+            else
+              NEW_MINOR=$((MINOR + 1))
+              VERSION="v${MAJOR}.${NEW_MINOR}"
+            fi
+          fi
+
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Calculated Version: $VERSION"
+
+      - name: Decode Keystore
+        run: |
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/release.jks
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/keystore.jks
+            echo "Keystore decoded successfully."
+          else
+            echo "KEYSTORE_BASE64 secret not set, fallback to default."
+          fi
+
+      - name: Build Release APK
+        run: ./gradlew :app:assembleRelease
+        env:
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEYSTORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Rename Output APK
+        run: |
+          APK_NAME="${APP_SLUG}-${VERSION}.apk"
+          FOUND_APK=""
+
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            FOUND_APK="app/build/outputs/apk/release/app-release.apk"
+          elif [ -f app/build/outputs/apk/release/app-release-unsigned.apk ]; then
+            FOUND_APK="app/build/outputs/apk/release/app-release-unsigned.apk"
+          else
+            FOUND_APK=$(find app/build/outputs/ -name "*.apk" | head -n 1)
+          fi
+
+          if [ -n "$FOUND_APK" ]; then
+            cp "$FOUND_APK" "$APK_NAME"
+            echo "APK_NAME=$APK_NAME" >> $GITHUB_ENV
+            echo "Renamed $FOUND_APK to $APK_NAME"
+          else
+            echo "Error: No APK file was generated!"
+            exit 1
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VERSION }}
+          name: "${{ env.APP_SLUG }} ${{ env.VERSION }}"
+          files: ${{ env.APK_NAME }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

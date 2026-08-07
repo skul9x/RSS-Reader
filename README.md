@@ -1,6 +1,6 @@
 # 📱 RSS Reader - Ứng dụng Theo dõi Tin tức & Tóm tắt AI Thông minh
 
-[![Build & Release APK](https://github.com/skul9x/RSS-Reader/actions/workflows/build.yml/badge.svg)](https://github.com/skul9x/RSS-Reader/actions/workflows/build.yml)
+[![Build & Release APK](https://github.com/skul9x/RSS-Reader/actions/workflows/android.yml/badge.svg)](https://github.com/skul9x/RSS-Reader/actions/workflows/android.yml)
 [![Platform](https://img.shields.io/badge/Platform-Android-green.svg)](https://www.android.com/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9+-blue.svg)](https://kotlinlang.org/)
 [![Compose](https://img.shields.io/badge/Jetpack-Compose-orange.svg)](https://developer.android.com/jetpack/compose)
