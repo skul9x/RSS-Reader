@@ -90,6 +90,12 @@ class BatchQueueManager private constructor(
     private suspend fun doFlush(items: List<ReadNewsItem>) {
         if (items.isEmpty()) return
         
+        // Guard: skip upload if user is not signed in
+        if (!firestoreRepo.isUserSignedIn()) {
+            Log.d(TAG, "Skipping flush: user not signed in (${items.size} items remain PENDING)")
+            return
+        }
+        
         Log.d(TAG, "Flushing ${items.size} items")
         
         try {

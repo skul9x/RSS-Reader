@@ -64,6 +64,10 @@ class AuthManager private constructor(private val context: Context) {
             
             if (user != null) {
                 Log.d(TAG, "Sign-in successful: ${user.email}")
+                
+                // Re-initialize sync components for the new user session
+                com.skul9x.rssreader.RssApplication.onUserSignIn(context)
+                
                 Result.success(user)
             } else {
                 Result.failure(Exception("Đăng nhập thất bại"))

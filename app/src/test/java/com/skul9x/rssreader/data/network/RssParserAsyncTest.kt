@@ -89,7 +89,9 @@ class RssParserAsyncTest {
 
     @After
     fun tearDown() {
-        server.shutdown()
+        try {
+            server.shutdown()
+        } catch (_: Exception) {}
         unmockkAll()
     }
 
