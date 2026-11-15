@@ -24,13 +24,28 @@ android {
 
     signingConfigs {
         create("release") {
-            // Read from Environment Variables (GitHub Secrets) or fallback to local
+            // Read from Environment Variables (GitHub Secrets) or fallback to local/debug
             val keystoreFile = file("release.jks")
             val keystoreFile2 = file("keystore.jks")
-            storeFile = if (keystoreFile.exists()) keystoreFile else if (keystoreFile2.exists()) keystoreFile2 else file("debug.keystore")
-            storePassword = System.getenv("STORE_PASSWORD") ?: System.getenv("KEYSTORE_PASSWORD") ?: "android"
-            keyAlias = System.getenv("KEY_ALIAS") ?: "androiddebugkey"
-            keyPassword = System.getenv("KEY_PASSWORD") ?: "android"
+            val debugKeystore = file("debug.keystore")
+            if (keystoreFile.exists()) {
+                storeFile = keystoreFile
+                storePassword = System.getenv("STORE_PASSWORD") ?: System.getenv("KEYSTORE_PASSWORD") ?: "android"
+                keyAlias = System.getenv("KEY_ALIAS") ?: "androiddebugkey"
+                keyPassword = System.getenv("KEY_PASSWORD") ?: "android"
+            } else if (keystoreFile2.exists()) {
+                storeFile = keystoreFile2
+                storePassword = System.getenv("STORE_PASSWORD") ?: System.getenv("KEYSTORE_PASSWORD") ?: "android"
+                keyAlias = System.getenv("KEY_ALIAS") ?: "androiddebugkey"
+                keyPassword = System.getenv("KEY_PASSWORD") ?: "android"
+            } else if (debugKeystore.exists()) {
+                storeFile = debugKeystore
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            } else {
+                initWith(getByName("debug"))
+            }
         }
     }
 

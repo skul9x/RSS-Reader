@@ -328,17 +328,15 @@ fun SettingsScreen(
         AddApiKeyDialog(
             onDismiss = { showAddKeyDialog = false },
             onAddKey = { input ->
-                val keys = input.split(Regex("\\s+")).filter { it.isNotBlank() }
+                val keys = ApiKeyManager.extractApiKeys(input)
                 var addedCount = 0
-                
+
                 keys.forEach { key ->
-                    if (key.startsWith("AIza") && key.length > 20) {
-                        if (apiKeyManager.addApiKey(key)) {
-                            addedCount++
-                        }
+                    if (apiKeyManager.addApiKey(key)) {
+                        addedCount++
                     }
                 }
-                
+
                 if (addedCount > 0) {
                     refreshKeys()
                     Toast.makeText(context, "Đã thêm $addedCount API key", Toast.LENGTH_SHORT).show()

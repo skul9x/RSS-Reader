@@ -17,14 +17,37 @@ class ApiKeyManager private constructor(context: Context) {
         // Changed name to ensure we start fresh with secure prefs
         private const val PREFS_NAME = "api_keys_secure"
         private const val KEY_API_KEYS = "gemini_api_keys"
-        
+
+        // Universal regex matching legacy AIza (39 chars) and modern AQ. auth keys (30+ chars)
+        private val API_KEY_REGEX = Regex("""\b(?:AIza[A-Za-z0-9_-]{34,35}|AQ\.[A-Za-z0-9_-]{30,})\b""")
+
         @Volatile
         private var instance: ApiKeyManager? = null
-        
+
         fun getInstance(context: Context): ApiKeyManager {
             return instance ?: synchronized(this) {
                 instance ?: ApiKeyManager(context.applicationContext).also { instance = it }
             }
+        }
+
+        /**
+         * Validates whether an individual trimmed string is a valid Gemini API key.
+         */
+        fun isValidApiKey(apiKey: String): Boolean {
+            val trimmed = apiKey.trim()
+            return API_KEY_REGEX.matches(trimmed)
+        }
+
+        /**
+         * Extracts all valid Gemini API keys from an arbitrary input string.
+         * Tolerates delimiters, quotes, assignment statements, and whitespace.
+         */
+        fun extractApiKeys(rawInput: String): List<String> {
+            if (rawInput.isBlank()) return emptyList()
+            return API_KEY_REGEX.findAll(rawInput)
+                .map { it.value.trim() }
+                .distinct()
+                .toList()
         }
     }
 
@@ -76,19 +99,19 @@ class ApiKeyManager private constructor(context: Context) {
      */
     fun addApiKey(apiKey: String): Boolean {
         val trimmedKey = apiKey.trim()
-        
-        // Validate key format (Gemini keys start with "AIza" and are ~39 chars)
-        if (trimmedKey.length < 30 || !trimmedKey.startsWith("AIza")) {
+
+        // Validate using the unified validator
+        if (!isValidApiKey(trimmedKey)) {
             return false
         }
-        
+
         val currentKeys = getApiKeys().toMutableList()
-        
+
         // Check for duplicates
         if (currentKeys.contains(trimmedKey)) {
             return false
         }
-        
+
         currentKeys.add(trimmedKey)
         saveKeys(currentKeys)
         return true

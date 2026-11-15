@@ -17,9 +17,18 @@ object GeminiResponseHelper {
         model: String = "", 
         temperature: Double = 0.7, 
         maxOutputTokens: Int = 4096,
-        useJsonMode: Boolean = false
+        useJsonMode: Boolean = false,
+        systemInstruction: String? = null
     ): String {
+        val modelLower = model.lowercase()
         val json = buildJsonObject {
+            if (!systemInstruction.isNullOrBlank()) {
+                putJsonObject("system_instruction") {
+                    putJsonArray("parts") {
+                        addJsonObject { put("text", systemInstruction) }
+                    }
+                }
+            }
             putJsonArray("contents") {
                 addJsonObject {
                     putJsonArray("parts") {
@@ -39,12 +48,89 @@ object GeminiResponseHelper {
                     put("responseMimeType", "application/json")
                 }
                 
-                // Disable thinking to avoid thinking tokens in response
-                // ONLY add thinkingConfig for Gemini 3+ models or "-latest" tags.
-                // Gemini 2.5 series does NOT support thinkingConfig and will return HTTP 400 Bad Request.
-                if (model.contains("gemini-3") || model.contains("latest")) {
+                // Latency Optimization: Disable or minimize thinking overhead
+                // Gemini 2.5 series uses thinkingBudget (integer token count: 0 = disabled)
+                // Gemini 3.x+ series uses thinkingLevel ("minimal" / "low")
+                if (modelLower.contains("gemini-2.5")) {
                     putJsonObject("thinkingConfig") {
-                        put("thinkingLevel", "minimal") // Recommended for Gemini 3.1 to reduce latency
+                        put("thinkingBudget", 0) // Explicitly disable thinking tokens for instant response
+                    }
+                } else if (modelLower.contains("gemini-3") || modelLower.contains("latest")) {
+                    putJsonObject("thinkingConfig") {
+                        put("thinkingLevel", "minimal") // Recommended for Gemini 3.1 to minimize latency
+                    }
+                }
+            }
+            putJsonArray("safetySettings") {
+                addJsonObject {
+                    put("category", "HARM_CATEGORY_HARASSMENT")
+                    put("threshold", "BLOCK_NONE")
+                }
+                addJsonObject {
+                    put("category", "HARM_CATEGORY_HATE_SPEECH")
+                    put("threshold", "BLOCK_NONE")
+                }
+                addJsonObject {
+                    put("category", "HARM_CATEGORY_SEXUALLY_EXPLICIT")
+                    put("threshold", "BLOCK_NONE")
+                }
+                addJsonObject {
+                    put("category", "HARM_CATEGORY_DANGEROUS_CONTENT")
+                    put("threshold", "BLOCK_NONE")
+                }
+            }
+        }
+        return json.toString()
+    }
+
+    /**
+     * Build JSON Request Body specifically optimized for Gemini Translation API requests.
+     * Incorporates top-level system_instruction, deterministic temperature (0.1), and token caps.
+     */
+    fun buildTranslationRequestBody(
+        systemInstruction: String?,
+        userPrompt: String,
+        model: String = "",
+        maxOutputTokens: Int = 128,
+        useJsonMode: Boolean = false,
+        temperature: Double = 0.1
+    ): String {
+        val modelLower = model.lowercase()
+        val json = buildJsonObject {
+            if (!systemInstruction.isNullOrBlank()) {
+                putJsonObject("system_instruction") {
+                    putJsonArray("parts") {
+                        addJsonObject { put("text", systemInstruction) }
+                    }
+                }
+            }
+            putJsonArray("contents") {
+                addJsonObject {
+                    put("role", "user")
+                    putJsonArray("parts") {
+                        addJsonObject {
+                            put("text", userPrompt)
+                        }
+                    }
+                }
+            }
+            putJsonObject("generationConfig") {
+                put("temperature", temperature)
+                put("maxOutputTokens", maxOutputTokens)
+                put("topP", 0.95)
+                
+                if (useJsonMode) {
+                    put("responseMimeType", "application/json")
+                }
+                
+                // Latency Optimization: Disable or minimize thinking overhead
+                if (modelLower.contains("gemini-2.5")) {
+                    putJsonObject("thinkingConfig") {
+                        put("thinkingBudget", 0) // Explicitly disable thinking tokens for instant response
+                    }
+                } else if (modelLower.contains("gemini-3") || modelLower.contains("latest")) {
+                    putJsonObject("thinkingConfig") {
+                        put("thinkingLevel", "minimal") // Recommended for Gemini 3.x / latest to minimize latency
                     }
                 }
             }

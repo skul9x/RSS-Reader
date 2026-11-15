@@ -1,29 +1,42 @@
 {
   "meta": { "schema_version": "1.1.0", "awf_version": "3.3.0" },
-  "updated_at": "2026-05-18T10:08:00Z",
+  "updated_at": "2026-11-15T19:52:00Z",
   "working_on": {
-    "feature": "Dynamic Model Rotation & Quota Management",
-    "task": "Completed Phase 4: Integration testing, robust failed-fast simulation, time simulation, and build installation.",
-    "status": "complete",
-    "files": ["ModelQuotaManager.kt", "GeminiApiClient.kt", "DynamicModelRotationIntegrationTest.kt", "build.gradle.kts", "libs.versions.toml", "phase-04-testing.md"],
+    "feature": "Brainstorming Gemini Flash-Lite Latest for Title Translation",
+    "task": "Completed research on best practices for coding Google AI translation & created BRIEF.md",
+    "status": "in_progress",
+    "files": [
+      "docs/BRIEF.md",
+      "GeminiApiClient.kt",
+      "GeminiResponseHelper.kt",
+      "GeminiPrompts.kt"
+    ],
     "blockers": [],
-    "notes": "Successfully implemented the failure recovery strategy for 429 and 503, wrote all robust integration tests using MockWebServer, solved JVM stack overflow issues by injecting timeProvider, and installed the debug app to device."
+    "notes": "Researched Google AI documentation for translation best practices (system instructions, low temperature 0.1, token capping, thinkingConfig minimal) and mapped to models/gemini-flash-lite-latest."
   },
   "pending_tasks": [
-    { "task": "Profile memory usage of GeminiApiClient under high-concurrency rotation", "priority": "low", "notes": "Verify if HTTP client connections are properly reused and released." }
+    {
+      "priority": "high",
+      "task": "Run /plan to design and split implementation phases for gemini-flash-lite-latest translation"
+    }
   ],
   "recent_changes": [
-    { "timestamp": "2026-05-18T10:05:00Z", "type": "deployment", "description": "Installed the assembled debug APK onto connected physical Android device (OP5D3BL1) and auto-launched it.", "files": ["app-debug.apk"] },
-    { "timestamp": "2026-05-18T03:01:00Z", "type": "testing", "description": "Phase 4: Created DynamicModelRotationIntegrationTest.kt, simulating 429 block, 503 cooldown, full outage and self-healing. Implemented timeProvider in ModelQuotaManager to bypass JVM MockK System stack overflow issues.", "files": ["DynamicModelRotationIntegrationTest.kt", "ModelQuotaManager.kt"] },
-    { "timestamp": "2026-05-18T02:50:00Z", "type": "feature", "description": "Phase 2 & 3: Implemented dynamic rotation priority logic. Modified GeminiApiClient to support local baseUrl routing and Singleton ModelQuotaManager sharing.", "files": ["GeminiApiClient.kt", "ModelQuotaManager.kt"] },
-    { "timestamp": "2026-05-18T02:40:00Z", "type": "config", "description": "Phase 1: Added okhttp-mockwebserver dependency to build catalog and module gradle dependencies.", "files": ["build.gradle.kts", "libs.versions.toml"] }
+    {
+      "timestamp": "2026-11-15T19:51:50Z",
+      "type": "documentation",
+      "description": "Created docs/BRIEF.md summarizing translation optimization using models/gemini-flash-lite-latest and Google AI best practices.",
+      "files": ["docs/BRIEF.md"]
+    }
   ],
-  "errors_encountered": [
-    { "error": "MockK static System.currentTimeMillis() mocking causes infinite loop and StackOverflowError in JVM", "solution": "Introduced lambda timeProvider variable in ModelQuotaManager, allowing safe test injection of custom simulated clock.", "resolved": true },
-    { "error": "MockWebServer classes unresolved during test compilation", "solution": "Added okhttp-mockwebserver dependency to build catalog and gradle script.", "resolved": true }
-  ],
+  "errors_encountered": [],
   "decisions_made": [
-    { "decision": "Inject timeProvider rather than mocking static JVM classes", "reason": "Bypasses modern JVM security/mocking limitations and yields robust, testable design." },
-    { "decision": "Enable dynamic baseUrl in GeminiApiClient", "reason": "Allows clean redirection to MockWebServer local address without mutating global static variables." }
+    {
+      "decision": "Use models/gemini-flash-lite-latest as primary translation model with fallback list",
+      "reason": "Allows app to automatically benefit from continuous improvements in Flash-Lite tier while maintaining fallback stability."
+    },
+    {
+      "decision": "Adopt system_instruction, temperature 0.1, and lower maxOutputTokens for translation",
+      "reason": "Standard Google AI best practice for translation to guarantee precision, eliminate conversational filler, and reduce TTFT."
+    }
   ]
 }

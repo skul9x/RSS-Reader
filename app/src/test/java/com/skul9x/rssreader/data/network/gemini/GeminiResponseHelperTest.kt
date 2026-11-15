@@ -24,20 +24,20 @@ class GeminiResponseHelperTest {
     }
 
     @Test
-    fun testBuildRequestBody_NoThinkingConfig_Gemini25() {
+    fun testBuildRequestBody_ThinkingConfig_Gemini25() {
         val prompt = "Translate this"
         
-        // Model gemini-2.5-flash-lite should NOT contain thinkingConfig
+        // Model gemini-2.5-flash-lite should contain thinkingConfig with thinkingBudget 0
         val model25Lite = "models/gemini-2.5-flash-lite"
         val requestBody25Lite = GeminiResponseHelper.buildRequestBody(prompt, model25Lite)
-        assertFalse("Did NOT expect thinkingConfig for $model25Lite. Request: $requestBody25Lite", 
-            requestBody25Lite.contains("\"thinkingConfig\""))
+        assertTrue("Expected thinkingBudget for $model25Lite. Request: $requestBody25Lite", 
+            requestBody25Lite.contains("\"thinkingBudget\":0"))
 
-        // Model gemini-2.5-flash should NOT contain thinkingConfig
+        // Model gemini-2.5-flash should contain thinkingConfig with thinkingBudget 0
         val model25 = "models/gemini-2.5-flash"
         val requestBody25 = GeminiResponseHelper.buildRequestBody(prompt, model25)
-        assertFalse("Did NOT expect thinkingConfig for $model25. Request: $requestBody25", 
-            requestBody25.contains("\"thinkingConfig\""))
+        assertTrue("Expected thinkingBudget for $model25. Request: $requestBody25", 
+            requestBody25.contains("\"thinkingBudget\":0"))
             
         // Empty model string should NOT contain thinkingConfig
         val modelEmpty = ""

@@ -25,7 +25,10 @@
     "Extraction Strategy: Custom > Site-Specific > Readability4J > Generic",
     "Model-First Rotation: Try same model across all API keys before fallback to heavier/preview model",
     "429 Quota Exceeded Strategy: Ban combination of Model + API Key for 30 hours. Persisted locally in SharedPreferences.",
-    "503 Server Overloaded Strategy: Cooldown combination of Model + API Key for 5 minutes in memory."
+    "503 Server Overloaded Strategy: Cooldown combination of Model + API Key for 5 minutes in memory.",
+    "Gemini API Keys: Hỗ trợ key AIza (39 ký tự) và key AQ. (~55 ký tự). Tự động trích xuất token hợp lệ từ chuỗi bẩn.",
+    "Thinking Config: Gemini 2.5 dùng thinkingBudget = 0 (tắt reasoning để phản hồi siêu tốc); Gemini 3+ dùng thinkingLevel = 'minimal'.",
+    "Summarization Context: Giới hạn tối đa 4,000 ký tự và 512 output tokens cho tóm tắt tin tức để tối ưu hóa TTFT."
   ],
   "features": [
     "Đọc tin tức offline",
@@ -35,7 +38,9 @@
     "Media Button support with auto-refresh batching",
     "Smart Content Extraction via Readability4J (Phase 3+)",
     "Dynamic API Key & Model Rotation (chống 429 và 503)",
-    "Robust Integration/Unit Testing with local MockWebServer"
+    "Robust Integration/Unit Testing with local MockWebServer",
+    "Universal Gemini API Key Parser (Hỗ trợ AQ. và AIza, làm sạch input thông minh)",
+    "Summarization Latency Quick Wins (Thinking Budget = 0 cho Gemini 2.5, Context Window 4K chars, Max Tokens 512)"
   ],
   "knowledge_items": { 
     "patterns": [
@@ -45,7 +50,8 @@
       "Model-First Rotation: Try same model across all API keys before fallback to heavier/preview model",
       "Tiered Content Extraction Pipeline",
       "Dynamic timeProvider interface in ModelQuotaManager for testable clock simulation",
-      "MockWebServer local routing using dynamic baseUrl variable in GeminiApiClient"
+      "MockWebServer local routing using dynamic baseUrl variable in GeminiApiClient",
+      "Thinking Budget / Thinking Level differentiation based on Gemini model family (2.5 vs 3.x+)"
     ], 
     "gotchas": [
       "Room limitations with empty collections in IN clause (causes Crash) - Use NoExclude query variant", 
@@ -54,7 +60,10 @@
       "Voz.vn large DOM CPU spikes - Use Regex to detect redirects before Parsing",
       "Memory leak via doc.clone(): Jsoup cloning duplicates large DOMs. Clean HTML as strings instead.",
       "Readability4J SLF4J Dependency: Missing binder causes R8 build failure. Use -dontwarn org.slf4j.**",
-      "MockK static System.currentTimeMillis() mocking causes infinite JVM loop & StackOverflowError. Use timeProvider interface lambda instead."
+      "MockK static System.currentTimeMillis() mocking causes infinite JVM loop & StackOverflowError. Use timeProvider interface lambda instead.",
+      "Gemini 2.5 models reject 'thinkingLevel' with HTTP 400 Bad Request; they require 'thinkingBudget: 0' to disable reasoning.",
+      "Gemini 3 models deprecate 'thinkingBudget' in favor of 'thinkingLevel: minimal'.",
+      "ADB install fails with INSTALL_FAILED_UPDATE_INCOMPATIBLE when signatures differ between Debug and Release builds - requires adb uninstall first."
     ], 
     "conventions": [
       "Use Flow for observing DB changes", 

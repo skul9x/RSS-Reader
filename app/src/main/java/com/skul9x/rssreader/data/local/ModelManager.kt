@@ -26,6 +26,7 @@ class ModelManager private constructor(context: Context) {
         private const val KEY_SAVED_MODELS = "saved_models"
 
         val DEFAULT_MODELS = listOf(
+            DynamicModel("models/gemini-flash-lite-latest", "Gemini Flash Lite (Latest)"),
             DynamicModel("models/gemini-3.5-flash-lite", "Gemini 3.5 Flash Lite"),
             DynamicModel("models/gemini-3.1-flash-lite", "Gemini 3.1 Flash Lite"),
             DynamicModel("models/gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite"),
@@ -41,7 +42,20 @@ class ModelManager private constructor(context: Context) {
                 instance ?: ModelManager(context.applicationContext).also { instance = it }
             }
         }
+
+        /**
+         * Validates that modelId starts with "models/" and has length > 10.
+         */
+        fun isValidModelId(modelId: String?): Boolean {
+            if (modelId.isNullOrBlank()) return false
+            return modelId.startsWith("models/") && modelId.length > 10
+        }
+
+        fun validateModelId(modelId: String?): Boolean = isValidModelId(modelId)
     }
+
+    fun isValidModelId(modelId: String?): Boolean = Companion.isValidModelId(modelId)
+    fun validateModelId(modelId: String?): Boolean = Companion.validateModelId(modelId)
 
     /**
      * Retrieves the current list of dynamic models.
@@ -90,7 +104,7 @@ class ModelManager private constructor(context: Context) {
      * Returns true if successful, false otherwise.
      */
     suspend fun addModel(modelId: String, displayName: String): Boolean = mutex.withLock {
-        if (!modelId.startsWith("models/") || modelId.length <= 10 || displayName.isBlank()) {
+        if (!isValidModelId(modelId) || displayName.isBlank()) {
             return false
         }
 
@@ -132,7 +146,7 @@ class ModelManager private constructor(context: Context) {
      * Returns true if successful, false otherwise.
      */
     suspend fun updateModel(oldModelId: String, newModelId: String, newDisplayName: String): Boolean = mutex.withLock {
-        if (!newModelId.startsWith("models/") || newModelId.length <= 10 || newDisplayName.isBlank()) {
+        if (!isValidModelId(newModelId) || newDisplayName.isBlank()) {
             return false
         }
 

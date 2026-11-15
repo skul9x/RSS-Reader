@@ -83,6 +83,7 @@ class AppPreferences private constructor(context: Context) {
                 enumVal.modelId
             } catch (e: Exception) {
                 when (storedValue) {
+                    "GEMINI_FLASH_LITE_LATEST" -> "models/gemini-flash-lite-latest"
                     "GEMINI_3_5_FLASH_LITE" -> "models/gemini-3.5-flash-lite"
                     "GEMINI_3_1_FLASH_LITE" -> "models/gemini-3.1-flash-lite"
                     "GEMINI_2_5_FLASH_LITE" -> "models/gemini-2.5-flash-lite"

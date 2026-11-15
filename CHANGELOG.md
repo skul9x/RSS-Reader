@@ -1,5 +1,23 @@
 # Changelog
  
+## [2.1] - 2026-11-15
+
+### Added
+- **Universal Gemini API Key Parser & Validator (`AQ.` & `AIza`):**
+  - **New Key Prefix Support:** Support Google AI Studio Authentication Keys (`AQ.` prefix, ~55 chars) alongside legacy Traffic Keys (`AIza` prefix, 39 chars).
+  - **Smart Input Sanitization:** Centralized regex parsing in `ApiKeyManager` to extract valid API keys from messy copy-pastes, multi-line blocks, surrounding quotes, commas, and `.env` formats.
+  - **UI Updates:** Updated `AddApiKeyDialog` and settings hints to guide users with both `AIza` and `AQ.` key formats.
+
+- **Summarization Latency Quick Wins:**
+  - **Zero Thinking Overhead:** Explicitly configured `"thinkingConfig": { "thinkingBudget": 0 }` for all `gemini-2.5` models, slashing latency from 6–8s to ~1.5–2.5s.
+  - **ThinkingLevel for Gemini 3:** Maintained `"thinkingLevel": "minimal"` for Gemini 3.x and `-latest` models.
+  - **Context Window Optimization:** Clamped summarization content input to 4,000 characters (down from 100,000 chars) with truncation indicator `... [NỘI DUNG ĐÃ CẮT BỚT]`.
+  - **Token Ceiling Right-Sizing:** Explicitly passed `maxOutputTokens = 512` for audio news summarization requests.
+  - **Comprehensive Verification:** Created `GeminiLatencyOptimizationTest.kt` testing thinking configs, legacy omissions, and truncation boundaries.
+
+### Deployment
+- Assembled `app-debug.apk` (~28MB) and installed onto connected Android physical device (`3B658D010BU00000`) via ADB after clean uninstall of outdated signature.
+
 ## [2.0] - 2026-05-18
 
 ### Added

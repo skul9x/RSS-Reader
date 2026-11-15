@@ -5,6 +5,12 @@ package com.skul9x.rssreader.data.network.gemini
  */
 object GeminiPrompts {
 
+    const val TRANSLATION_SYSTEM_INSTRUCTION =
+        "Bạn là chuyên gia dịch thuật tin tức sang tiếng Việt. Dịch chính xác, tự nhiên, ngắn gọn. TUYỆT ĐỐI không thêm giải thích hay câu chào."
+
+    const val BATCH_TRANSLATION_SYSTEM_INSTRUCTION =
+        "Bạn là chuyên gia dịch thuật. Dịch các giá trị tiêu đề trong JSON object sau sang tiếng Việt. Giữ nguyên toàn bộ ID làm keys. Chỉ dịch phần text của values. Trả về đúng định dạng JSON object."
+
     /**
      * Build prompt for summarizing news content.
      */
@@ -24,14 +30,10 @@ $content
     }
 
     /**
-     * Build translation prompt.
+     * Build translation prompt providing clean user text input without prompt bloat.
      */
     fun buildTranslationPrompt(text: String): String {
-        return """
-Dịch đoạn text sau sang tiếng Việt. Chỉ trả về bản dịch, không giải thích hay thêm bất cứ điều gì khác.
-
-Text: $text
-""".trim()
+        return "Text: $text"
     }
 
     /**

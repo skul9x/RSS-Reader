@@ -220,7 +220,7 @@ fun AddApiKeyDialog(
                 OutlinedTextField(
                     value = apiKeyText,
                     onValueChange = { apiKeyText = it },
-                    placeholder = { Text("Dán danh sách key vào đây...\nAIza...\nAIza...") },
+                    placeholder = { Text("Dán danh sách key vào đây...\nAIza...\nAQ.Ab8...") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(150.dp),
@@ -249,9 +249,12 @@ fun AddApiKeyDialog(
             }
         },
         confirmButton = {
+            val hasValidKeys = remember(apiKeyText) {
+                ApiKeyManager.extractApiKeys(apiKeyText).isNotEmpty()
+            }
             Button(
                 onClick = { onAddKey(apiKeyText) },
-                enabled = apiKeyText.contains("AIza"),
+                enabled = hasValidKeys,
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Text("Thêm")

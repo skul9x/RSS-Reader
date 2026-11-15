@@ -205,8 +205,11 @@ class GeminiApiClient(private val context: Context) {
     suspend fun translateToVietnamese(text: String): String {
         if (text.isBlank()) return text
         
-        // Single model for translation
+        // Models cycled in order for translation
         val translationModels = listOf(
+            "models/gemini-flash-lite-latest",
+            "models/gemini-3.5-flash-lite",
+            "models/gemini-3.1-flash-lite",
             "models/gemini-2.5-flash-lite"
         )
         
@@ -231,7 +234,14 @@ class GeminiApiClient(private val context: Context) {
                     try {
                         Log.d(TAG, "Trying translation: $model with API key: $hashedKey (Attempt ${keyIndex + 1}/${keys.size})")
                         val translationPrompt = GeminiPrompts.buildTranslationPrompt(text)
-                        val result = tryTranslate(apiKey, model, translationPrompt, useJsonMode = false)
+                        val result = tryTranslate(
+                            apiKey = apiKey,
+                            model = model,
+                            prompt = translationPrompt,
+                            systemInstruction = GeminiPrompts.TRANSLATION_SYSTEM_INSTRUCTION,
+                            maxOutputTokens = 128,
+                            useJsonMode = false
+                        )
                         
                         when (result) {
                             is ApiResult.Success -> {
@@ -302,8 +312,11 @@ class GeminiApiClient(private val context: Context) {
     suspend fun translateTitleBatch(titles: Map<String, String>): Map<String, String> {
         if (titles.isEmpty()) return emptyMap()
         
-        // Single model for batch translation
+        // Models cycled in order for batch translation
         val translationModels = listOf(
+            "models/gemini-flash-lite-latest",
+            "models/gemini-3.5-flash-lite",
+            "models/gemini-3.1-flash-lite",
             "models/gemini-2.5-flash-lite"
         )
         
@@ -318,14 +331,7 @@ class GeminiApiClient(private val context: Context) {
             val inputJsonObject = buildJsonObject {
                 titles.forEach { (id, title) -> put(id, title) }
             }
-            val prompt = """
-                Dịch các tiêu đề sau sang tiếng Việt. 
-                Trả về kết quả dạng JSON object với format {"id": "tiêu đề đã dịch"}.
-                Giữ nguyên ID. Chỉ dịch giá trị.
-                
-                Input:
-                $inputJsonObject
-            """.trimIndent()
+            val prompt = inputJsonObject.toString()
             
             // Strategy: Try models
             for (model in translationModels) {
@@ -340,7 +346,14 @@ class GeminiApiClient(private val context: Context) {
 
                     try {
                         Log.d(TAG, "Trying batch translation: $model | API key: $hashedKey (Attempt ${keyIndex + 1}/${keys.size})")
-                        val result = tryTranslate(apiKey, model, prompt, useJsonMode = true)
+                        val result = tryTranslate(
+                            apiKey = apiKey,
+                            model = model,
+                            prompt = prompt,
+                            systemInstruction = GeminiPrompts.BATCH_TRANSLATION_SYSTEM_INSTRUCTION,
+                            maxOutputTokens = 384,
+                            useJsonMode = true
+                        )
                         
                         when (result) {
                             is ApiResult.Success -> {
@@ -477,7 +490,14 @@ class GeminiApiClient(private val context: Context) {
      * Try to translate text using Gemini API.
      * @param prompt Ready-to-use prompt (already built by caller). DO NOT wrap again.
      */
-    private suspend fun tryTranslate(apiKey: String, model: String, prompt: String, useJsonMode: Boolean = false): ApiResult {
+    private suspend fun tryTranslate(
+        apiKey: String,
+        model: String,
+        prompt: String,
+        systemInstruction: String = "",
+        maxOutputTokens: Int = 128,
+        useJsonMode: Boolean = false
+    ): ApiResult {
         val startTime = System.currentTimeMillis()
         
         return try {
@@ -491,7 +511,13 @@ class GeminiApiClient(private val context: Context) {
                 isError = false
             )
             
-            val requestBody = GeminiResponseHelper.buildRequestBody(prompt, model, useJsonMode = useJsonMode)
+            val requestBody = GeminiResponseHelper.buildTranslationRequestBody(
+                systemInstruction = systemInstruction,
+                userPrompt = prompt,
+                model = model,
+                maxOutputTokens = maxOutputTokens,
+                useJsonMode = useJsonMode
+            )
             
             val request = Request.Builder()
                 .url("$baseUrl/$model:generateContent?key=$apiKey")
@@ -788,15 +814,19 @@ class GeminiApiClient(private val context: Context) {
             // Check if already cancelled before making request
             coroutineContext.ensureActive()
             
-            // Truncate content to prevent exceeding model context window
-            val truncatedContent = if (content.length > 100_000) {
-                content.take(100_000) + "\n... [NỘI DUNG ĐÃ CẮT BỚT]"
+            // Truncate content to 4,000 characters (sufficient for news summaries, eliminates TTFT latency)
+            val truncatedContent = if (content.length > 4_000) {
+                content.take(4_000) + "\n... [NỘI DUNG ĐÃ CẮT BỚT]"
             } else {
                 content
             }
             
             val prompt = GeminiPrompts.buildSummarizationPrompt(truncatedContent)
-            val requestBody = GeminiResponseHelper.buildRequestBody(prompt, model)
+            val requestBody = GeminiResponseHelper.buildRequestBody(
+                prompt = prompt, 
+                model = model, 
+                maxOutputTokens = 512
+            )
             
             val request = Request.Builder()
                 .url("$baseUrl/$model:generateContent?key=$apiKey")

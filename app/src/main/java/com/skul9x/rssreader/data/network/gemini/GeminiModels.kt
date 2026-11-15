@@ -61,9 +61,24 @@ sealed class SuggestClassResult {
  * Available Gemini models for summarization.
  */
 enum class SummarizeModel(val modelId: String, val displayName: String) {
+    GEMINI_FLASH_LITE_LATEST("models/gemini-flash-lite-latest", "Gemini Flash Lite (Latest)"),
     GEMINI_3_5_FLASH_LITE("models/gemini-3.5-flash-lite", "Gemini 3.5 Flash Lite"),
     GEMINI_3_1_FLASH_LITE("models/gemini-3.1-flash-lite", "Gemini 3.1 Flash Lite"),
     GEMINI_2_5_FLASH_LITE("models/gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite"),
     GEMINI_3_6_FLASH("models/gemini-3.6-flash", "Gemini 3.6 Flash"),
-    GEMINI_2_5_FLASH("models/gemini-2.5-flash", "Gemini 2.5 Flash")
+    GEMINI_2_5_FLASH("models/gemini-2.5-flash", "Gemini 2.5 Flash");
+
+    companion object {
+        val MODEL_MAP: Map<String, SummarizeModel> = entries.associateBy { it.modelId }
+
+        fun fromModelId(modelId: String?): SummarizeModel? {
+            if (modelId == null) return null
+            return MODEL_MAP[modelId] ?: entries.firstOrNull { it.modelId.equals(modelId, ignoreCase = true) }
+        }
+    }
 }
+
+/**
+ * Alias to support GeminiModels reference.
+ */
+typealias GeminiModels = SummarizeModel
